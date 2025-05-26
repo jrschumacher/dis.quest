@@ -1,0 +1,46 @@
+{
+  "defs": {
+    "main": {
+      "properties": {
+        "createdAt": {
+          "format": "datetime",
+          "type": "string"
+        },
+        "createdBy": {
+          "format": "did",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 2048,
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "maxLength": 256,
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "createdBy",
+        "createdAt"
+      ],
+      "type": "object"
+    }
+  },
+  "description": "Unencrypted discussion thread/topic definition",
+  "id": "quest.dis.topic",
+  "record": {
+    "allow": [
+      "com.atproto.repo.createRecord"
+    ],
+    "key": "topic"
+  },
+  "revision": 1,
+  "type": "record"
+}

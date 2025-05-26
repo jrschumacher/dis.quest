@@ -1,0 +1,38 @@
+{
+  "defs": {
+    "main": {
+      "properties": {
+        "content": {
+          "maxLength": 8192,
+          "type": "string"
+        },
+        "createdAt": {
+          "format": "datetime",
+          "type": "string"
+        },
+        "replyTo": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "topic",
+        "createdAt",
+        "content"
+      ],
+      "type": "object"
+    }
+  },
+  "description": "Unencrypted message in a discussion",
+  "id": "quest.dis.message",
+  "record": {
+    "allow": [
+      "com.atproto.repo.createRecord"
+    ],
+    "key": "msg"
+  },
+  "revision": 1,
+  "type": "record"
+}

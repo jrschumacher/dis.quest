@@ -1,0 +1,43 @@
+{
+  "defs": {
+    "main": {
+      "properties": {
+        "joinedAt": {
+          "format": "datetime",
+          "type": "string"
+        },
+        "participant": {
+          "format": "did",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "moderator",
+            "contributor",
+            "follower"
+          ],
+          "type": "string"
+        },
+        "topic": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "topic",
+        "participant",
+        "joinedAt"
+      ],
+      "type": "object"
+    }
+  },
+  "description": "Participation marker for an unencrypted discussion",
+  "id": "quest.dis.participation",
+  "record": {
+    "allow": [
+      "com.atproto.repo.createRecord"
+    ],
+    "key": "participation"
+  },
+  "revision": 1,
+  "type": "record"
+}
