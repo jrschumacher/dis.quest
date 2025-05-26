@@ -6,8 +6,9 @@ import (
 )
 
 var serverCmd = &cobra.Command{
-	Use:   "server",
-	Short: "Start the dis.quest server",
+	Use:     "server",
+	Aliases: []string{"start"},
+	Short:   "Start the dis.quest server",
 	Run: func(cmd *cobra.Command, args []string) {
 		server.Start()
 	},
