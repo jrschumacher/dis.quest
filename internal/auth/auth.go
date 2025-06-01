@@ -40,16 +40,28 @@ func OAuth2Config(provider string) *oauth2.Config {
 }
 
 // Session utilities
-const sessionCookieName = "disquest_session"
+const (
+	sessionCookieName      = "disquest_session"
+	refreshTokenCookieName = "disquest_refresh"
+)
 
-func SetSessionCookie(w http.ResponseWriter, value string) {
+func SetSessionCookie(w http.ResponseWriter, accessToken string, refreshToken ...string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
-		Value:    value,
+		Value:    accessToken,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   false, // Set to true in production with HTTPS
 	})
+	if len(refreshToken) > 0 && refreshToken[0] != "" {
+		http.SetCookie(w, &http.Cookie{
+			Name:     refreshTokenCookieName,
+			Value:    refreshToken[0],
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   false, // Set to true in production with HTTPS
+		})
+	}
 }
 
 func ClearSessionCookie(w http.ResponseWriter) {
@@ -65,6 +77,15 @@ func ClearSessionCookie(w http.ResponseWriter) {
 
 func GetSessionCookie(r *http.Request) (string, error) {
 	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil {
+		return "", err
+	}
+	return cookie.Value, nil
+}
+
+// GetRefreshTokenCookie retrieves the refresh token from the cookie
+func GetRefreshTokenCookie(r *http.Request) (string, error) {
+	cookie, err := r.Cookie(refreshTokenCookieName)
 	if err != nil {
 		return "", err
 	}
