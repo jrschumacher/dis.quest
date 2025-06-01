@@ -52,12 +52,12 @@ func (rt *AuthRouter) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	provider, err := auth.DiscoverPDS(handle)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to discover PDS", "error", err)
+		writeError(w, http.StatusInternalServerError, "Failed to discover PDS", "handle", handle, "error", err)
 		return
 	}
 	codeVerifier, codeChallenge, err := auth.GeneratePKCE()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to generate PKCE challenge", "error", err)
+		writeError(w, http.StatusInternalServerError, "Failed to generate PKCE challenge", "handle", handle, "error", err)
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -98,31 +98,32 @@ func (rt *AuthRouter) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Missing handle context")
 		return
 	}
-	provider, err := auth.DiscoverPDS(handleCookie.Value)
+	handle := handleCookie.Value
+	provider, err := auth.DiscoverPDS(handle)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to rediscover PDS", "error", err)
+		writeError(w, http.StatusInternalServerError, "Failed to rediscover PDS", "handle", handle, "error", err)
 		return
 	}
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		writeError(w, http.StatusBadRequest, "Missing code")
+		writeError(w, http.StatusBadRequest, "Missing code", "handle", handle)
 		return
 	}
 	// State validation
 	state := r.URL.Query().Get("state")
 	stateCookie, err := r.Cookie("oauth_state")
 	if err != nil || state != stateCookie.Value {
-		writeError(w, http.StatusBadRequest, "Invalid state", "expected", stateCookie.Value, "got", state)
+		writeError(w, http.StatusBadRequest, "Invalid state", "handle", handle, "expected", stateCookie.Value, "got", state)
 		return
 	}
 	verCookie, err := r.Cookie("pkce_verifier")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Missing PKCE verifier")
+		writeError(w, http.StatusBadRequest, "Missing PKCE verifier", "handle", handle)
 		return
 	}
 	token, err := auth.ExchangeCodeForToken(ctx, provider, code, verCookie.Value)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "Token exchange failed", "error", err)
+		writeError(w, http.StatusUnauthorized, "Token exchange failed", "handle", handle, "error", err)
 		return
 	}
 	// Store both access and refresh tokens in cookies for long-lived sessions
