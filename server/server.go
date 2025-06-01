@@ -1,94 +1,71 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/jrschumacher/dis.quest/components"
-	"github.com/jrschumacher/dis.quest/internal/auth"
-	"golang.org/x/oauth2"
+	"github.com/jrschumacher/dis.quest/internal/config"
+	"github.com/jrschumacher/dis.quest/internal/logger"
+	auth "github.com/jrschumacher/dis.quest/server/auth-handlers"
+	dotWellKnown "github.com/jrschumacher/dis.quest/server/dot-well-known-handlers"
+	health "github.com/jrschumacher/dis.quest/server/health-handlers"
 )
 
-func Start() {
+const (
+	readTimeout  = 10 * time.Second
+	writeTimeout = 10 * time.Second
+	idleTimeout  = 60 * time.Second
 
-	http.Handle("/", templ.Handler(components.Page(false)))
-	http.Handle("/login", templ.Handler(components.Login()))
-	http.Handle("/discussion", templ.Handler(components.Discussion()))
+	// Headers
+	contentTypeOptions    = "nosniff"
+	frameOptions          = "DENY"
+	xssProtection         = "1; mode=block"
+	contentSecurityPolicy = "default-src 'self'"
+	referrerPolicy        = "strict-origin-when-cross-origin"
+)
 
-	http.HandleFunc("/auth/login", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			fmt.Fprintln(w, "Method not allowed")
-			return
-		}
-		// TODO: Parse handle and app password from form
-		// TODO: Call ATProto session create endpoint
-		// TODO: On success, set session cookie
-		fmt.Fprintln(w, "[Stub] Handle ATProto login (handle + app password)")
+func Start(cfg *config.Config) {
+	if err := config.Validate(cfg); err != nil {
+		logger.Error("invalid config", "error", err)
+		panic("invalid config")
+	}
+
+	mux := http.NewServeMux()
+
+	dotWellKnown.RegisterRoutes(mux, "/.well-known", cfg)
+	auth.RegisterRoutes(mux, "/auth", cfg)
+	health.RegisterRoutes(mux, "/health", cfg)
+
+	mux.Handle("/", templ.Handler(components.Page(false)))
+	mux.Handle("/discussion", templ.Handler(components.Discussion()))
+
+	// Secure headers middleware
+	handler := secureHeaders(mux)
+
+	srv := &http.Server{
+		Addr:         ":" + cfg.Port,
+		Handler:      handler,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+		IdleTimeout:  idleTimeout,
+	}
+
+	logger.Info("Listening on " + srv.Addr)
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logger.Error("server error", "error", err)
+	}
+}
+
+// secureHeaders adds common security headers to all responses
+func secureHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", contentTypeOptions)
+		w.Header().Set("X-Frame-Options", frameOptions)
+		w.Header().Set("X-XSS-Protection", xssProtection)
+		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
+		w.Header().Set("Referrer-Policy", referrerPolicy)
+		next.ServeHTTP(w, r)
 	})
-
-	http.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
-		auth.ClearSessionCookie(w)
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-	})
-
-	http.HandleFunc("/auth/redirect", func(w http.ResponseWriter, r *http.Request) {
-		handle := r.URL.Query().Get("handle")
-		if handle == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintln(w, "Missing handle")
-			return
-		}
-		// Discover provider (for Bluesky, use https://bsky.social)
-		provider := "https://bsky.social" // TODO: Discover from handle if federated
-		codeVerifier, codeChallenge, err := auth.GeneratePKCE()
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintln(w, "Failed to generate PKCE challenge")
-			return
-		}
-		// Store codeVerifier in a temporary cookie (for demo; use state or session in production)
-		http.SetCookie(w, &http.Cookie{
-			Name:     "pkce_verifier",
-			Value:    codeVerifier,
-			Path:     "/",
-			HttpOnly: true,
-		})
-		conf := auth.OAuth2Config(provider)
-		url := conf.AuthCodeURL("state-xyz",
-			oauth2.SetAuthURLParam("code_challenge", codeChallenge),
-			oauth2.SetAuthURLParam("code_challenge_method", "S256"),
-			oauth2.SetAuthURLParam("handle", handle),
-		)
-		http.Redirect(w, r, url, http.StatusFound)
-	})
-
-	http.HandleFunc("/auth/callback", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		provider := "https://bsky.social" // TODO: Discover from state/session if federated
-		code := r.URL.Query().Get("code")
-		if code == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintln(w, "Missing code")
-			return
-		}
-		verCookie, err := r.Cookie("pkce_verifier")
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintln(w, "Missing PKCE verifier")
-			return
-		}
-		token, err := auth.ExchangeCodeForToken(ctx, provider, code, verCookie.Value)
-		if err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
-			fmt.Fprintf(w, "Token exchange failed: %v", err)
-			return
-		}
-		auth.SetSessionCookie(w, token.AccessToken)
-		http.Redirect(w, r, "/discussion", http.StatusSeeOther)
-	})
-
-	fmt.Println("Listening on :3000")
-	http.ListenAndServe(":3000", nil)
 }

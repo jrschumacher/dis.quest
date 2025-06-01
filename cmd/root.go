@@ -1,11 +1,14 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
+	"github.com/jrschumacher/dis.quest/internal/config"
+	"github.com/jrschumacher/dis.quest/internal/logger"
 	"github.com/spf13/cobra"
 )
+
+var cfg *config.Config
 
 var rootCmd = &cobra.Command{
 	Use:   "disquest",
@@ -13,9 +16,11 @@ var rootCmd = &cobra.Command{
 	Long:  `dis.quest — Go POC for ATProtocol Discussions`,
 }
 
-func Execute() {
+func Execute(c *config.Config) {
+	cfg = c
+	logger.Info("Starting CLI", "env", cfg.AppEnv)
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		logger.Error("CLI error", "error", err)
 		os.Exit(1)
 	}
 }
