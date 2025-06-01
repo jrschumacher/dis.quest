@@ -24,8 +24,8 @@ WORKDIR /app
 # Use a static non-root user if available, otherwise fallback to root
 # USER nonroot:nonroot
 
-COPY --from=builder /app/disquest .
+COPY --from=builder /app/bin/disquest .
 
 EXPOSE 3000
 
-CMD ["./disquest"]
+CMD ["./disquest", "start"]
