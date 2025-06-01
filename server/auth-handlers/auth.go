@@ -7,19 +7,25 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/auth"
 	"github.com/jrschumacher/dis.quest/internal/config"
 	"github.com/jrschumacher/dis.quest/internal/logger"
+	"github.com/jrschumacher/dis.quest/internal/svrlib"
 	"golang.org/x/oauth2"
 )
 
+type AuthRouter struct {
+	*svrlib.Router
+}
+
 // RegisterRoutes registers all /auth/* routes on the given mux, with the prefix handled by the caller.
 func RegisterRoutes(mux *http.ServeMux, prefix string, cfg *config.Config) {
-	mux.HandleFunc(prefix+"/login", LoginHandler)
-	mux.HandleFunc(prefix+"/logout", LogoutHandler)
-	mux.HandleFunc(prefix+"/redirect", RedirectHandler)
-	mux.HandleFunc(prefix+"/callback", CallbackHandler)
+	router := &AuthRouter{svrlib.NewRouter(mux, prefix, cfg)}
+	mux.HandleFunc(prefix+"/login", router.LoginHandler)
+	mux.HandleFunc(prefix+"/logout", router.LogoutHandler)
+	mux.HandleFunc(prefix+"/redirect", router.RedirectHandler)
+	mux.HandleFunc(prefix+"/callback", router.CallbackHandler)
 }
 
 // LoginHandler handles POST /login requests
-func LoginHandler(w http.ResponseWriter, r *http.Request) {
+func (rt *AuthRouter) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		logger.Info("Method not allowed", "path", r.URL.Path)
@@ -34,13 +40,13 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // LogoutHandler handles /auth/logout requests
-func LogoutHandler(w http.ResponseWriter, r *http.Request) {
+func (rt *AuthRouter) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	auth.ClearSessionCookie(w)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // RedirectHandler handles /auth/redirect requests
-func RedirectHandler(w http.ResponseWriter, r *http.Request) {
+func (rt *AuthRouter) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 	handle := r.URL.Query().Get("handle")
 	if handle == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -72,7 +78,7 @@ func RedirectHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // CallbackHandler handles /auth/callback requests
-func CallbackHandler(w http.ResponseWriter, r *http.Request) {
+func (rt *AuthRouter) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	provider := "https://bsky.social" // TODO: Discover from state/session if federated
 	code := r.URL.Query().Get("code")
