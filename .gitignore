@@ -1,6 +1,19 @@
+# Gitkeep
+!.gitkeep
+
+# Security
+keys/*
+config.yaml
+
+# Temporary files
+bin/
 /assets/dist
 tmp
 node_modules
 .idea
 __htmgo
 dist
+
+
+
+

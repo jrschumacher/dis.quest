@@ -9,7 +9,7 @@ tasks:
   build:
     cmds:
       - templ generate
-      - go build -o bin/disquest ./cmd/server
+      - go build -o bin/disquest ./
 
   docker:
     cmds:

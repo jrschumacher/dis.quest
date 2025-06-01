@@ -11,6 +11,7 @@ import (
 )
 
 func Start() {
+
 	http.Handle("/", templ.Handler(components.Page(false)))
 	http.Handle("/login", templ.Handler(components.Login()))
 	http.Handle("/discussion", templ.Handler(components.Discussion()))
