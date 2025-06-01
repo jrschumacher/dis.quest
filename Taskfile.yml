@@ -3,12 +3,13 @@ version: '3'
 tasks:
   run:
     cmds:
-      - htmgo run
+      - go run . start
     silent: true
 
   build:
     cmds:
-      - htmgo build
+      - templ generate
+      - go build -o bin/disquest ./cmd/server
 
   docker:
     cmds:
@@ -16,5 +17,15 @@ tasks:
 
   watch:
     cmds:
-      - htmgo watch
+      - templ generate
+      - reflex -r '\.go$|\.templ$' -s -- sh -c 'go run . start'
     silent: true
+
+  test:
+    cmds:
+      - go test ./...
+
+  dev:
+    cmds:
+      - air
+    silent: false

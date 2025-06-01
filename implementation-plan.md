@@ -4,71 +4,10 @@ This plan outlines the architecture and development roadmap for `dis.quest`, a s
 
 ## ⚙️ Phase 0: Dev Environment & Bootstrap
 
-- [ ] Setup Go module and folder structure
-- [ ] Add Makefile or dev scripts for common commands
-- [ ] Add `.env.example` and configuration loader
-- [ ] Add CI (e.g., GitHub Actions with `golangci-lint`, tests)
-- [ ] Add local testing support for PDS stubs or mocks
-
-## ✅ Phase 1: UI/UX Foundation
-
-- [ ] Draft landing page (overview of the platform)
-- [ ] Draft login page (OAuth2-based auth)
-- [ ] Draft discussion page (topic threads, messages, reply UI)
-
-## 🔐 Phase 2: Authentication
-
-- [ ] Implement OAuth2 login using Bluesky/ATProto identity
-- [ ] Store user sessions securely (cookies or token-based)
-- [ ] Enable reading/writing to user's PDS after authentication
-
-## 🧠 Phase 3: Server + Lexicon Support
-
-- [ ] Implement backend API in Go to:
-  - [ ] Serve lexicons (custom `quest.dis.*` definitions)
-  - [ ] Create a new post via ATProto
-  - [ ] Handle post signing and encoding
-- [ ] Add TDF-based policy support to backend post creation
-
-## 🔁 Phase 4: Firehose Integration
-
-- [ ] Connect to ATProto firehose
-- [ ] Parse relevant `quest.dis.*` events
-- [ ] Store incoming posts
-- [ ] Deduplicate and validate message integrity
-
-## 🗄️ Phase 5: Storage and Indexing
-
-- [ ] Choose persistence backend (PostgreSQL, SQLite, or BadgerDB)
-- [ ] Model discussion threads and messages
-- [ ] Store user profiles for mapping DID → handle
-- [ ] Add indexing for efficient post linking and retrieval
-
-## 📡 Phase 6: Realtime Updates
-
-- [ ] Add websocket server support
-- [ ] Push updates on new post events
-- [ ] Push notifications for mentions or new messages in threads
-
-## 🧩 Phase 7: REST Interfaces
-
-- [ ] Build internal REST APIs to fetch messages by thread ID
-- [ ] Support posting messages locally and syncing to PDS asynchronously
-- [ ] Expose metadata endpoints (e.g., latest topics, participants)
-
----
-
-This doc is maintained as the source of truth for planning and tracking. Let me know when you’d like to assign priorities, owners, or split tasks into subtickets.
-# dis.quest Implementation Plan
-
-This plan outlines the architecture and development roadmap for `dis.quest`, a secure discussion platform built on the ATProtocol with optional OpenTDF-based encryption. Each item is tracked with checkboxes to provide persistent progress tracking.
-
-## ⚙️ Phase 0: Dev Environment & Bootstrap
-
-- [ ] Setup Go module and folder structure
-- [ ] Add Makefile or dev scripts for common commands
-- [ ] Add `.env.example` and configuration loader
-- [ ] Add CI (e.g., GitHub Actions with `golangci-lint`, tests)
+- [x] Setup Go module and folder structure
+- [x] Add Taskfile for common tasks
+- [x] Add `.env.example` and configuration loader
+- [x] Add CI (e.g., GitHub Actions with `golangci-lint`, tests)
 - [ ] Add local testing support for PDS stubs or mocks
 
 ## ✅ Phase 1: UI/UX Foundation

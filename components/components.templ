@@ -5,33 +5,91 @@ templ Page(dev bool) {
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-			<title>Counts</title>
+			<title>dis.quest — Secure ATProtocol Discussions</title>
 			<link rel="stylesheet" href="/assets/css/pico/pico.css"/>
 			<script src="/assets/js/htmx.2.0.4.js"></script>
 		</head>
 		<body class="bg-gray-100">
-			<section>
-			</section>
+			<main class="container">
+				<section style="margin-top: 4rem; text-align: center;">
+					<h1>Welcome to <span style="color: #f59e42;">dis.quest</span></h1>
+					<p>A secure, decentralized discussion platform built on ATProtocol with optional OpenTDF encryption.</p>
+					<a href="/login" class="contrast">Login with Bluesky</a>
+				</section>
+			</main>
 		</body>
 	</html>
 }
 
 templ Login() {
-	<section>
-	</section>
+	<main class="container">
+		<section style="margin-top: 4rem; max-width: 400px; margin-left: auto; margin-right: auto;">
+			<h2>Login to dis.quest</h2>
+			<form method="get" action="/auth/redirect">
+				<label for="handle">Handle</label>
+				<input type="text" id="handle" name="handle" placeholder="your.handle.bsky.social" required />
+				<button type="submit" class="contrast" style="margin-top: 1rem;">Continue</button>
+			</form>
+			<p style="margin-top: 1rem; color: #888;">Enter your Bluesky/ATProto handle. You'll be redirected to your provider to authenticate.</p>
+		</section>
+	</main>
+}
+
+templ Discussion() {
+	<main class="container">
+		<section style="margin-top: 2rem;">
+			<h2>Discussion Thread</h2>
+			<div>
+				@Topic()
+				<!-- Multiple top-level messages -->
+				<div style="margin-top: 2rem;">
+					@Message("@bob", "2025-05-26", "I agree with the topic and would like to add...")
+					@Message("@carol", "2025-05-26", "Here's another perspective on this topic.")
+					@Message("@dave", "2025-05-26", "What about edge cases?")
+				</div>
+				<!-- Threaded replies for one message -->
+				<div style="margin-left: 2rem; margin-top: 1rem;">
+					@ThreadMessage("@eve", "2025-05-26", "Replying to @bob: Good point!")
+					@ThreadMessage("@frank", "2025-05-26", "Replying to @carol: I disagree.")
+					<!-- Simulate a long thread -->
+					@ThreadMessage("@grace", "2025-05-26", "Another reply in a long thread...")
+					@ThreadMessage("@heidi", "2025-05-26", "Yet another reply...")
+					@ThreadMessage("@ivan", "2025-05-26", "This thread is getting long!")
+					@ThreadMessage("@judy", "2025-05-26", "Adding my thoughts to the long thread.")
+				</div>
+				<!-- Simulate many top-level messages -->
+				<div style="margin-top: 2rem;">
+					@Message("@kate", "2025-05-26", "Top-level message 4")
+					@Message("@leo", "2025-05-26", "Top-level message 5")
+					@Message("@mallory", "2025-05-26", "Top-level message 6")
+					@Message("@nick", "2025-05-26", "Top-level message 7")
+					@Message("@olivia", "2025-05-26", "Top-level message 8")
+					@Message("@peggy", "2025-05-26", "Top-level message 9")
+					@Message("@quinn", "2025-05-26", "Top-level message 10")
+				</div>
+			</div>
+		</section>
+	</main>
 }
 
 templ Topic() {
-	<section>
-	</section>
+	<article style="padding: 1rem; border: 1px solid #eee; border-radius: 8px; background: #fff;">
+		<h3>Sample Topic Title</h3>
+		<p>This is the start of a discussion topic. Here you can describe the subject and context.</p>
+		<small>by @alice • 2025-05-26</small>
+	</article>
 }
 
-templ Message() {
-	<section>
-	</section>
+templ Message(author string, date string, content string) {
+	<article style="padding: 0.75rem; border: 1px solid #eee; border-radius: 8px; background: #fff; margin-bottom: 0.5rem;">
+		<p>{content}</p>
+		<small>by {author} • {date}</small>
+	</article>
 }
 
-templ ThreadMessage() {
-	<section>
-	</section>
+templ ThreadMessage(author string, date string, content string) {
+	<article style="margin-top: 0.5rem; padding: 0.75rem; border-left: 3px solid #f59e42; background: #f9f9f9; border-radius: 6px;">
+		<p>{content}</p>
+		<small>by {author} • {date}</small>
+	</article>
 }
