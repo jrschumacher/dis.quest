@@ -45,13 +45,14 @@ const (
 	refreshTokenCookieName = "dsq_refresh"
 )
 
-func SetSessionCookie(w http.ResponseWriter, accessToken string, refreshToken ...string) {
+func SetSessionCookieWithEnv(w http.ResponseWriter, accessToken string, refreshToken []string, isDev bool) {
+	secure := !isDev
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    accessToken,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
+		Secure:   secure,
 	})
 	if len(refreshToken) > 0 && refreshToken[0] != "" {
 		http.SetCookie(w, &http.Cookie{
@@ -59,19 +60,26 @@ func SetSessionCookie(w http.ResponseWriter, accessToken string, refreshToken ..
 			Value:    refreshToken[0],
 			Path:     "/",
 			HttpOnly: true,
-			Secure:   false, // Set to true in production with HTTPS
+			Secure:   secure,
 		})
 	}
 }
 
-func ClearSessionCookie(w http.ResponseWriter) {
+// Update SetSessionCookie to call the new function for backward compatibility
+func SetSessionCookie(w http.ResponseWriter, accessToken string, refreshToken ...string) {
+	// Default to production (secure) if not using the new function
+	SetSessionCookieWithEnv(w, accessToken, refreshToken, false)
+}
+
+func ClearSessionCookieWithEnv(w http.ResponseWriter, isDev bool) {
+	secure := !isDev
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   secure,
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name:     refreshTokenCookieName,
@@ -79,8 +87,13 @@ func ClearSessionCookie(w http.ResponseWriter) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   secure,
 	})
+}
+
+func ClearSessionCookie(w http.ResponseWriter) {
+	// Default to production (secure) if not using the new function
+	ClearSessionCookieWithEnv(w, false)
 }
 
 func GetSessionCookie(r *http.Request) (string, error) {

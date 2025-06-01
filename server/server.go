@@ -38,7 +38,7 @@ func Start(cfg *config.Config) {
 	auth.RegisterRoutes(mux, "/auth", cfg)
 	health.RegisterRoutes(mux, "/health", cfg)
 
-	mux.Handle("/", templ.Handler(components.Page(false)))
+	mux.Handle("/", templ.Handler(components.Page(cfg.AppEnv)))
 	mux.Handle("/discussion", templ.Handler(components.Discussion()))
 
 	// Secure headers middleware

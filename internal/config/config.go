@@ -11,6 +11,12 @@ import (
 	"github.com/spf13/viper"
 )
 
+const (
+	EnvProd = "production"
+	EnvDev  = "development"
+	EnvTest = "test"
+)
+
 // Config holds application configuration loaded from environment variables or config file.
 type Config struct {
 	AppEnv      string `default:"development" validate:"required"`

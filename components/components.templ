@@ -1,6 +1,8 @@
 package components
 
-templ Page(dev bool) {
+import "github.com/jrschumacher/dis.quest/internal/config"
+
+templ Page(appEnv string) {
 	<html>
 		<head>
 			<meta charset="UTF-8"/>
@@ -10,6 +12,7 @@ templ Page(dev bool) {
 			<script src="/assets/js/htmx.2.0.4.js"></script>
 		</head>
 		<body class="bg-gray-100">
+			@DevBanner(appEnv)
 			<main class="container">
 				<section style="margin-top: 4rem; text-align: center;">
 					<h1>Welcome to <span style="color: #f59e42;">dis.quest</span></h1>
@@ -19,6 +22,14 @@ templ Page(dev bool) {
 			</main>
 		</body>
 	</html>
+}
+
+templ DevBanner(appEnv string) {
+	if appEnv == config.EnvDev {
+		<div style="background: #fffae6; color: #b45309; padding: 1rem; text-align: center; font-weight: bold; border-bottom: 2px solid #f59e42; font-size: 1.2rem;">
+			⚠️ DEVELOPMENT MODE — Not for production use! ⚠️
+		</div>
+	}
 }
 
 templ Login() {

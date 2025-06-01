@@ -17,8 +17,12 @@ type AuthRouter struct {
 // RegisterRoutes registers all /auth/* routes on the given mux, with the prefix handled by the caller.
 func RegisterRoutes(mux *http.ServeMux, prefix string, cfg *config.Config) {
 	router := &AuthRouter{svrlib.NewRouter(mux, prefix, cfg)}
-	mux.HandleFunc(prefix+"/login", router.LoginHandler)
-	mux.HandleFunc(prefix+"/logout", router.LogoutHandler)
+	// Pass config to handlers for env-aware cookie security
+	routerConfig := cfg
+
+	// Wrap handlers to inject config for cookie security
+	mux.HandleFunc(prefix+"/login", func(w http.ResponseWriter, r *http.Request) { router.LoginHandlerWithConfig(w, r, routerConfig) })
+	mux.HandleFunc(prefix+"/logout", func(w http.ResponseWriter, r *http.Request) { router.LogoutHandlerWithConfig(w, r, routerConfig) })
 	mux.HandleFunc(prefix+"/redirect", router.RedirectHandler)
 	mux.HandleFunc(prefix+"/callback", router.CallbackHandler)
 }
@@ -37,9 +41,25 @@ func (rt *AuthRouter) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "[Stub] Handle ATProto login (handle + app password)", http.StatusNotImplemented)
 }
 
+// LoginHandlerWithConfig handles POST /login requests with config for cookie security
+func (rt *AuthRouter) LoginHandlerWithConfig(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed", "path", r.URL.Path)
+		return
+	}
+	logger.Info("Stub: Handle ATProto login", "env", cfg.AppEnv)
+	http.Error(w, "[Stub] Handle ATProto login (handle + app password)", http.StatusNotImplemented)
+}
+
 // LogoutHandler handles /auth/logout requests
 func (rt *AuthRouter) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	auth.ClearSessionCookie(w)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// LogoutHandlerWithConfig handles /auth/logout requests with config for cookie security
+func (rt *AuthRouter) LogoutHandlerWithConfig(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
+	auth.ClearSessionCookieWithEnv(w, cfg.AppEnv == "development")
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -126,12 +146,13 @@ func (rt *AuthRouter) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "Token exchange failed", "handle", handle, "error", err)
 		return
 	}
-	// Store both access and refresh tokens in cookies for long-lived sessions
 	refreshToken := ""
 	if token.RefreshToken != "" {
 		refreshToken = token.RefreshToken
 	}
-	auth.SetSessionCookie(w, token.AccessToken, refreshToken)
+	// Use config for secure flag
+	cfg := rt.Router.Config
+	auth.SetSessionCookieWithEnv(w, token.AccessToken, []string{refreshToken}, cfg.AppEnv == "development")
 	http.Redirect(w, r, "/discussion", http.StatusSeeOther)
 }
 
