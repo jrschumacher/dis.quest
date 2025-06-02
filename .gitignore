@@ -4,6 +4,7 @@
 # Security
 keys/*
 config.yaml
+.envrc
 
 # Temporary files
 bin/
