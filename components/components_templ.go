@@ -99,7 +99,7 @@ func Login() templ.Component {
 			templ_7745c5c3_Var3 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<main class=\"container\"><section style=\"margin-top: 4rem; max-width: 400px; margin-left: auto; margin-right: auto;\"><h2>Login to dis.quest</h2><form method=\"get\" action=\"/auth/redirect\"><label for=\"handle\">Handle</label> <input type=\"text\" id=\"handle\" name=\"handle\" placeholder=\"your.handle.bsky.social\" required> <button type=\"submit\" class=\"contrast\" style=\"margin-top: 1rem;\">Continue</button></form><p style=\"margin-top: 1rem; color: #888;\">Enter your Bluesky/ATProto handle. You'll be redirected to your provider to authenticate.</p></section></main>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<main class=\"container\"><section style=\"margin-top: 4rem; max-width: 400px; margin-left: auto; margin-right: auto;\"><h2>Login to dis.quest</h2><form method=\"post\" action=\"/auth/login\"><label for=\"handle\">Handle</label> <input type=\"text\" id=\"handle\" name=\"handle\" placeholder=\"your.handle.bsky.social\" required> <label for=\"password\" style=\"margin-top: 1rem;\">App Password</label> <input type=\"password\" id=\"password\" name=\"password\" placeholder=\"App Password\" required> <button type=\"submit\" class=\"contrast\" style=\"margin-top: 1rem;\">Login</button></form></section></main>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -281,7 +281,7 @@ func Message(author string, date string, content string) templ.Component {
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(content)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 96, Col: 13}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 97, Col: 13}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
@@ -294,7 +294,7 @@ func Message(author string, date string, content string) templ.Component {
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(author)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 97, Col: 19}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 98, Col: 19}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
@@ -307,7 +307,7 @@ func Message(author string, date string, content string) templ.Component {
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(date)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 97, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 98, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
@@ -349,7 +349,7 @@ func ThreadMessage(author string, date string, content string) templ.Component {
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(content)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 103, Col: 13}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 104, Col: 13}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
@@ -362,7 +362,7 @@ func ThreadMessage(author string, date string, content string) templ.Component {
 		var templ_7745c5c3_Var12 string
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(author)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 104, Col: 19}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 105, Col: 19}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
@@ -375,7 +375,7 @@ func ThreadMessage(author string, date string, content string) templ.Component {
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(date)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 104, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 105, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
