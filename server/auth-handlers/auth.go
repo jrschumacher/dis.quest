@@ -25,6 +25,7 @@ func RegisterRoutes(mux *http.ServeMux, prefix string, cfg *config.Config) {
 	mux.HandleFunc(prefix+"/logout", func(w http.ResponseWriter, r *http.Request) { router.LogoutHandlerWithConfig(w, r, routerConfig) })
 	mux.HandleFunc(prefix+"/redirect", router.RedirectHandler)
 	mux.HandleFunc(prefix+"/callback", router.CallbackHandler)
+	mux.HandleFunc(prefix+"/client-metadata.json", router.ClientMetadataHandler)
 }
 
 // LoginHandler handles POST /login requests
@@ -47,8 +48,24 @@ func (rt *AuthRouter) LoginHandlerWithConfig(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusMethodNotAllowed, "Method not allowed", "path", r.URL.Path)
 		return
 	}
-	logger.Info("Stub: Handle ATProto login", "env", cfg.AppEnv)
-	http.Error(w, "[Stub] Handle ATProto login (handle + app password)", http.StatusNotImplemented)
+	handle := r.FormValue("handle")
+	password := r.FormValue("password")
+	if handle == "" || password == "" {
+		writeError(w, http.StatusBadRequest, "Missing handle or password")
+		return
+	}
+	provider, err := auth.DiscoverPDS(handle)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to discover PDS", "handle", handle, "error", err)
+		return
+	}
+	session, err := auth.CreateSession(provider, handle, password)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "Invalid credentials", "handle", handle, "error", err)
+		return
+	}
+	auth.SetSessionCookieWithEnv(w, session.AccessJwt, []string{session.RefreshJwt}, cfg.AppEnv == "development")
+	http.Redirect(w, r, "/discussion", http.StatusSeeOther)
 }
 
 // LogoutHandler handles /auth/logout requests
@@ -105,7 +122,6 @@ func (rt *AuthRouter) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 	url := conf.AuthCodeURL(state,
 		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
 		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
-		oauth2.SetAuthURLParam("handle", handle),
 	)
 	http.Redirect(w, r, url, http.StatusFound)
 }
@@ -154,6 +170,19 @@ func (rt *AuthRouter) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	cfg := rt.Router.Config
 	auth.SetSessionCookieWithEnv(w, token.AccessToken, []string{refreshToken}, cfg.AppEnv == "development")
 	http.Redirect(w, r, "/discussion", http.StatusSeeOther)
+}
+
+// Serve the OAuth client metadata JSON for Bluesky
+func (rt *AuthRouter) ClientMetadataHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{
+	  "client_name": "dis.quest",
+	  "redirect_uris": ["https://dis.quest/auth/callback"],
+	  "grant_types": ["authorization_code"],
+	  "response_types": ["code"],
+	  "token_endpoint_auth_method": "none"
+	}`))
 }
 
 // writeError is a helper to write an error response and log it

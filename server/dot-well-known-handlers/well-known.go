@@ -69,5 +69,5 @@ func (rt *WellKnownRouter) BlueskyClientMetadataHandler(w http.ResponseWriter, r
 // JWKSHandler serves the public JWKS from keys/jwks.public.json.
 func (rt *WellKnownRouter) JWKSHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	io.WriteString(w, rt.Router.Config.JWKS)
+	io.WriteString(w, rt.Router.Config.JWKSPublic)
 }

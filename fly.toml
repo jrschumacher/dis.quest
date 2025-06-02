@@ -9,6 +9,7 @@ primary_region = 'atl'
 [build]
 
 [env]
+  APP_ENV = 'production'
   # Set environment variables here
   # For example, to set a variable named "FOO" to "bar", uncomment the line below:
   # FOO = 'bar'
@@ -20,6 +21,13 @@ primary_region = 'atl'
   auto_start_machines = true
   min_machines_running = 0
   processes = ['app']
+
+# [[http_service.machine_checks]]
+#   image = "curlimages/curl"
+#   entrypoint = ["/bin/sh", "-c"]
+#   command = ["curl http://[$FLY_TEST_MACHINE_IP] | grep 'OK'"]
+#   kill_signal = "SIGKILL"
+#   kill_timeout = "5s"
 
 [[vm]]
   memory = '1gb'

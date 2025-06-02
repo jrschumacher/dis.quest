@@ -4,13 +4,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/a-h/templ"
-	"github.com/jrschumacher/dis.quest/components"
 	"github.com/jrschumacher/dis.quest/internal/config"
 	"github.com/jrschumacher/dis.quest/internal/logger"
-	auth "github.com/jrschumacher/dis.quest/server/auth-handlers"
-	dotWellKnown "github.com/jrschumacher/dis.quest/server/dot-well-known-handlers"
-	health "github.com/jrschumacher/dis.quest/server/health-handlers"
+	apphandlers "github.com/jrschumacher/dis.quest/server/app"
+	authhandlers "github.com/jrschumacher/dis.quest/server/auth-handlers"
+	wellknownhandlers "github.com/jrschumacher/dis.quest/server/dot-well-known-handlers"
+	healthhandlers "github.com/jrschumacher/dis.quest/server/health-handlers"
 )
 
 const (
@@ -34,12 +33,10 @@ func Start(cfg *config.Config) {
 
 	mux := http.NewServeMux()
 
-	dotWellKnown.RegisterRoutes(mux, "/.well-known", cfg)
-	auth.RegisterRoutes(mux, "/auth", cfg)
-	health.RegisterRoutes(mux, "/health", cfg)
-
-	mux.Handle("/", templ.Handler(components.Page(cfg.AppEnv)))
-	mux.Handle("/discussion", templ.Handler(components.Discussion()))
+	wellknownhandlers.RegisterRoutes(mux, "/.well-known", cfg)
+	authhandlers.RegisterRoutes(mux, "/auth", cfg)
+	healthhandlers.RegisterRoutes(mux, "/health", cfg)
+	apphandlers.RegisterRoutes(mux, "/", cfg)
 
 	// Secure headers middleware
 	handler := secureHeaders(mux)

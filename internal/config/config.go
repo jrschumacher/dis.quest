@@ -19,14 +19,14 @@ const (
 
 // Config holds application configuration loaded from environment variables or config file.
 type Config struct {
-	AppEnv      string `default:"development" validate:"required"`
-	Port        string `default:"3000" validate:"required"`
-	PDSEndpoint string `default:"http://localhost:4000"`
+	AppEnv      string `mapstructure:"app_env" default:"development" validate:"required"`
+	Port        string `mapstructure:"port" default:"3000" validate:"required"`
+	PDSEndpoint string `mapstructure:"pds_endpoint" default:"http://localhost:4000"`
 
 	// Security settings
 	DatabaseURL  string `secret:"true" mapstructure:"database_url"`
 	JWKSPrivate  string `validate:"required" secret:"true" mapstructure:"jwks_private"`
-	JWKS         string `mapstructure:"jwks"`
+	JWKSPublic   string `mapstructure:"jwks_public"`
 	PublicDomain string `mapstructure:"public_domain"`
 	AppName      string `mapstructure:"app_name"`
 
@@ -37,7 +37,7 @@ type Config struct {
 // Load loads configuration from config file and environment variables using viper.
 func Load(jwks string) *Config {
 	cfg := Config{
-		JWKS: jwks,
+		JWKSPublic: jwks,
 	}
 
 	// Initialize viper

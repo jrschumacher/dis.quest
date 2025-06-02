@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"net/http"
-	"os"
 
 	"golang.org/x/oauth2"
 )
@@ -25,16 +24,16 @@ func GeneratePKCE() (codeVerifier, codeChallenge string, err error) {
 	return
 }
 
-// OAuth2 config for Bluesky/ATProto
+// OAuth2 config for Bluesky/ATProto (new OAuth2 flow)
 func OAuth2Config(provider string) *oauth2.Config {
 	return &oauth2.Config{
-		ClientID:     os.Getenv("OAUTH_CLIENT_ID"),
-		ClientSecret: os.Getenv("OAUTH_CLIENT_SECRET"),
-		RedirectURL:  os.Getenv("OAUTH_REDIRECT_URI"),
+		ClientID:     "https://dis.quest/auth/client-metadata.json", // TODO: Use env var or config
+		ClientSecret: "",                                            // Not required for public clients
+		RedirectURL:  "https://dis.quest/auth/callback",             // TODO: Use env var or config
 		Scopes:       []string{"openid", "offline_access"},
 		Endpoint: oauth2.Endpoint{
-			AuthURL:  provider + "/xrpc/com.atproto.server.requestOAuth2Token",  // Example, update as needed
-			TokenURL: provider + "/xrpc/com.atproto.server.exchangeOAuth2Token", // Example, update as needed
+			AuthURL:  provider + "/oauth/authorize",
+			TokenURL: provider + "/oauth/token",
 		},
 	}
 }
