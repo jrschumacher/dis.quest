@@ -36,12 +36,10 @@ templ Login() {
 	<main class="container">
 		<section style="margin-top: 4rem; max-width: 400px; margin-left: auto; margin-right: auto;">
 			<h2>Login to dis.quest</h2>
-			<form method="post" action="/auth/login">
+			<form method="get" action="/auth/redirect">
 				<label for="handle">Handle</label>
 				<input type="text" id="handle" name="handle" placeholder="your.handle.bsky.social" required />
-				<label for="password" style="margin-top: 1rem;">App Password</label>
-				<input type="password" id="password" name="password" placeholder="App Password" required />
-				<button type="submit" class="contrast" style="margin-top: 1rem;">Login</button>
+				<button type="submit" class="contrast" style="margin-top: 1rem;">Continue</button>
 			</form>
 		</section>
 	</main>

@@ -181,7 +181,8 @@ func (rt *AuthRouter) ClientMetadataHandler(w http.ResponseWriter, r *http.Reque
 	  "redirect_uris": ["https://dis.quest/auth/callback"],
 	  "grant_types": ["authorization_code"],
 	  "response_types": ["code"],
-	  "token_endpoint_auth_method": "none"
+	  "token_endpoint_auth_method": "none",
+	  "scope": "openid offline_access"
 	}`))
 }
 
