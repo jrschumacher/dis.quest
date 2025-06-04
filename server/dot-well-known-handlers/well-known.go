@@ -116,7 +116,8 @@ func (rt *WellKnownRouter) RedirectHandler(w http.ResponseWriter, r *http.Reques
 
 	// Get OAuth2 config with correct redirect URI
 	provider := publicDomain // For Bluesky, provider is the PDS base URL
-	conf := auth.OAuth2Config(provider)
+	cfg := rt.Router.Config
+	conf := auth.OAuth2Config(provider, cfg)
 	conf.RedirectURL = redirectURI
 
 	// Generate auth URL with required parameters

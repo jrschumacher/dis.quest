@@ -38,5 +38,11 @@ public_domain: http://localhost:3000
 # Human friendly name displayed in OAuth metadata and UI.
 app_name: dis.quest
 
+# OAuth client identifier served at /auth/client-metadata.json
+oauth_client_id: https://dis.quest/auth/client-metadata.json
+
+# Redirect URL for OAuth callbacks
+oauth_redirect_url: https://dis.quest/auth/callback
+
 # Logging verbosity. One of: DEBUG, INFO, WARN, ERROR.
 log_level: INFO
