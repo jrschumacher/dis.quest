@@ -30,7 +30,7 @@ func OAuth2Config(provider string) *oauth2.Config {
 		ClientID:     "https://dis.quest/auth/client-metadata.json", // TODO: Use env var or config
 		ClientSecret: "",                                            // Not required for public clients
 		RedirectURL:  "https://dis.quest/auth/callback",             // TODO: Use env var or config
-		Scopes:       []string{"openid", "offline_access"},
+		Scopes:       []string{"atproto", "transition:generic"},
 		Endpoint: oauth2.Endpoint{
 			AuthURL:  provider + "/oauth/authorize",
 			TokenURL: provider + "/oauth/token",

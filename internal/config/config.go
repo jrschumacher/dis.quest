@@ -25,20 +25,18 @@ type Config struct {
 
 	// Security settings
 	DatabaseURL  string `secret:"true" mapstructure:"database_url"`
-	JWKSPrivate  string `validate:"required" secret:"true" mapstructure:"jwks_private"`
-	JWKSPublic   string `mapstructure:"jwks_public"`
-	PublicDomain string `mapstructure:"public_domain"`
-	AppName      string `mapstructure:"app_name"`
+	JWKSPrivate  string `validate:"required" secret:"true" mapstructure:"jwks_private" validate:"required"`
+	JWKSPublic   string `mapstructure:"jwks_public" validate:"required"`
+	PublicDomain string `mapstructure:"public_domain" validate:"required"`
+	AppName      string `mapstructure:"app_name" validate:"required"`
 
 	// Logging
 	LogLevel string `default:"INFO" validate:"oneof=DEBUG INFO WARN ERROR"`
 }
 
 // Load loads configuration from config file and environment variables using viper.
-func Load(jwks string) *Config {
-	cfg := Config{
-		JWKSPublic: jwks,
-	}
+func Load() *Config {
+	cfg := Config{}
 
 	// Initialize viper
 	v := viper.New()

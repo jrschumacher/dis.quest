@@ -5,8 +5,10 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/jrschumacher/dis.quest/internal/auth"
 	"github.com/jrschumacher/dis.quest/internal/config"
 	"github.com/jrschumacher/dis.quest/internal/svrlib"
+	"golang.org/x/oauth2"
 )
 
 const blueskyClientMetadataFilename = "bluesky-client-metadata.json"
@@ -50,11 +52,17 @@ func (rt *WellKnownRouter) BlueskyClientMetadataHandler(w http.ResponseWriter, r
 	w.Header().Set("Content-Type", "application/json")
 	publicDomain := rt.Router.Config.PublicDomain
 	appName := rt.Router.Config.AppName
+	var redirectURIs []string
+	if publicDomain == "http://localhost:3000" || publicDomain == "http://127.0.0.1:3000" {
+		redirectURIs = []string{publicDomain + "/auth/callback"}
+	} else {
+		redirectURIs = []string{publicDomain + "/auth/callback"}
+	}
 	metadata := BlueskyClientMetadata{
 		ClientID:                publicDomain + "/.well-known/bluesky-client-metadata.json",
 		ClientName:              appName,
 		ClientURI:               publicDomain,
-		RedirectURIs:            []string{"http://localhost:3000/oauth/callback", publicDomain + "/oauth/callback"},
+		RedirectURIs:            redirectURIs,
 		GrantTypes:              []string{"authorization_code", "refresh_token"},
 		ResponseTypes:           []string{"code"},
 		Scope:                   "atproto",
@@ -70,4 +78,59 @@ func (rt *WellKnownRouter) BlueskyClientMetadataHandler(w http.ResponseWriter, r
 func (rt *WellKnownRouter) JWKSHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	io.WriteString(w, rt.Router.Config.JWKSPublic)
+}
+
+// RedirectHandler handles OAuth2 redirect with dynamically generated redirect URI.
+func (rt *WellKnownRouter) RedirectHandler(w http.ResponseWriter, r *http.Request) {
+	handle := r.URL.Query().Get("handle")
+	if handle == "" {
+		http.Error(w, "missing handle parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Use PKCE and state helpers from internal/auth
+	state := auth.GenerateStateToken()
+	codeVerifier, codeChallenge, err := auth.GeneratePKCE()
+	if err != nil {
+		http.Error(w, "failed to generate PKCE", http.StatusInternalServerError)
+		return
+	}
+
+	// Set cookies for state, codeVerifier, and handle (for callback validation)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "oauth_state",
+		Value:    state,
+		Path:     "/",
+		HttpOnly: true,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "pkce_verifier",
+		Value:    codeVerifier,
+		Path:     "/",
+		HttpOnly: true,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "oauth_handle",
+		Value:    handle,
+		Path:     "/",
+		HttpOnly: true,
+	})
+
+	// Use PublicDomain from config for redirect URI
+	publicDomain := rt.Router.Config.PublicDomain
+	redirectURI := publicDomain + "/auth/callback"
+
+	// Get OAuth2 config with correct redirect URI
+	provider := publicDomain // For Bluesky, provider is the PDS base URL
+	conf := auth.OAuth2Config(provider)
+	conf.RedirectURL = redirectURI
+
+	// Generate auth URL with required parameters
+	authURL := conf.AuthCodeURL(state,
+		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
+		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
+		oauth2.SetAuthURLParam("handle", handle),
+	)
+
+	http.Redirect(w, r, authURL, http.StatusFound)
 }

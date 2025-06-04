@@ -97,6 +97,17 @@ func (rt *AuthRouter) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to generate PKCE challenge", "handle", handle, "error", err)
 		return
 	}
+	// Generate and store DPoP keypair in secure cookie
+	dpopKey, err := auth.GenerateDPoPKeyPair()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to generate DPoP keypair", "handle", handle, "error", err)
+		return
+	}
+	cfg := rt.Router.Config
+	if err := auth.SetDPoPKeyCookie(w, dpopKey.PrivateKey, cfg.AppEnv == "development"); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to set DPoP key cookie", "handle", handle, "error", err)
+		return
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "pkce_verifier",
 		Value:    codeVerifier,
@@ -157,6 +168,14 @@ func (rt *AuthRouter) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Missing PKCE verifier", "handle", handle)
 		return
 	}
+	// Retrieve DPoP private key from secure cookie
+	dpopKey, err := auth.GetDPoPKeyFromCookie(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Missing DPoP key", "handle", handle)
+		return
+	}
+	_ = dpopKey // TODO: Use for DPoP JWT in token exchange
+	// token, err := auth.ExchangeCodeForTokenWithDPoP(ctx, provider, code, verCookie.Value, dpopKey)
 	token, err := auth.ExchangeCodeForToken(ctx, provider, code, verCookie.Value)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "Token exchange failed", "handle", handle, "error", err)
@@ -177,12 +196,16 @@ func (rt *AuthRouter) ClientMetadataHandler(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{
+	  "client_id": "https://dis.quest/auth/client-metadata.json",
 	  "client_name": "dis.quest",
-	  "redirect_uris": ["https://dis.quest/auth/callback"],
-	  "grant_types": ["authorization_code"],
+	  "client_uri": "https://dis.quest",
+	  "application_type": "web",
+	  "dpop_bound_access_tokens": true,
+	  "grant_types": ["authorization_code", "refresh_token"],
+	  "scope": "atproto transition:generic",
 	  "response_types": ["code"],
-	  "token_endpoint_auth_method": "none",
-	  "scope": "openid offline_access"
+	  "redirect_uris": ["https://dis.quest/auth/callback"],
+	  "token_endpoint_auth_method": "none"
 	}`))
 }
 

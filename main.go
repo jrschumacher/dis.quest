@@ -8,12 +8,8 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/logger"
 )
 
-//go:embed "keys/jwks.public.json"
-var jwksPublic string
-
 func main() {
-	// Load config with embedded JWKS
-	cfg := config.Load(jwksPublic)
+	cfg := config.Load()
 	logger.Init(cfg.LogLevel)
 
 	cmd.Execute(cfg)
