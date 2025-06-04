@@ -7,6 +7,7 @@ This project is an experimental implementation of a secure, discussion-style mes
 - Custom lexicons under `quest.dis.*` and `quest.dis.sec.*`
 - Discussion topics, messages, participation tracking
 - Optional encrypted messaging using OpenTDF-style fields
+- Q&A support via `selectedAnswer` on topics
 - Targeting full PDS/AppView compatibility
 - Written in idiomatic Go
 
@@ -35,6 +36,7 @@ This project is intentionally limited in scope to prioritize core discussion fea
 - **Thread** — Replies to a top-level message, supporting conversational depth
 - **Emoji Reactions** — Non-verbal message responses (e.g., 👍 ❤️ 🔥)
 - **Upvotes** — Lightweight endorsement signal for a message or thread
+- **Q&A Topics** — Threads with an accepted answer (stored in `selectedAnswer`)
 - **Mentions (`@handle`)** — Notifies tagged users (planned)
 - **WebSocket subscriptions** — Realtime updates for followed discussions (planned)
 - **Attachments** — Encrypted media or files associated with a post
@@ -43,7 +45,6 @@ This project is intentionally limited in scope to prioritize core discussion fea
 ### 🚫 Out of Scope
 
 - **Polls** — Voting-based discussions
-- **Q&A Topics** — Threads with accepted answers
 - **Direct Messaging** — 1:1 or group chat support
 - **Private Threads** — Topics with per-message visibility restrictions
 - **Rich Text Editors** — Markdown/WYSIWYG formatting is deferred to the client layer

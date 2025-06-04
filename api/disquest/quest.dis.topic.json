@@ -10,6 +10,10 @@
           "format": "did",
           "type": "string"
         },
+        "selectedAnswer": {
+          "description": "Record ID of the accepted reply",
+          "type": "string"
+        },
         "summary": {
           "maxLength": 2048,
           "type": "string"
@@ -41,6 +45,6 @@
     ],
     "key": "topic"
   },
-  "revision": 1,
+  "revision": 2,
   "type": "record"
 }
