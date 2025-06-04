@@ -54,7 +54,7 @@ func (rt *WellKnownRouter) BlueskyClientMetadataHandler(w http.ResponseWriter, r
 		ClientID:                publicDomain + "/.well-known/bluesky-client-metadata.json",
 		ClientName:              appName,
 		ClientURI:               publicDomain,
-		RedirectURIs:            []string{"http://localhost:3000/oauth/callback", publicDomain + "/oauth/callback"},
+		RedirectURIs:            []string{"http://localhost:3000" + redirectURIPath, publicDomain + redirectURIPath},
 		GrantTypes:              []string{"authorization_code", "refresh_token"},
 		ResponseTypes:           []string{"code"},
 		Scope:                   "atproto",
