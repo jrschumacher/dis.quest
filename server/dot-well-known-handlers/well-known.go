@@ -52,17 +52,11 @@ func (rt *WellKnownRouter) BlueskyClientMetadataHandler(w http.ResponseWriter, r
 	w.Header().Set("Content-Type", "application/json")
 	publicDomain := rt.Router.Config.PublicDomain
 	appName := rt.Router.Config.AppName
-	var redirectURIs []string
-	if publicDomain == "http://localhost:3000" || publicDomain == "http://127.0.0.1:3000" {
-		redirectURIs = []string{publicDomain + "/auth/callback"}
-	} else {
-		redirectURIs = []string{publicDomain + "/auth/callback"}
-	}
 	metadata := BlueskyClientMetadata{
 		ClientID:                publicDomain + "/.well-known/bluesky-client-metadata.json",
 		ClientName:              appName,
 		ClientURI:               publicDomain,
-		RedirectURIs:            redirectURIs,
+		RedirectURIs:            []string{"http://localhost:3000" + redirectURIPath, publicDomain + redirectURIPath},
 		GrantTypes:              []string{"authorization_code", "refresh_token"},
 		ResponseTypes:           []string{"code"},
 		Scope:                   "atproto",
