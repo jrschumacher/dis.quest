@@ -19,3 +19,4 @@ build:
 
 clean:
 	rm -rf bin/
+

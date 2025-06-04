@@ -29,3 +29,4 @@ COPY --from=builder /app/bin/disquest .
 EXPOSE 3000
 
 CMD ["./disquest", "start"]
+

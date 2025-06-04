@@ -58,3 +58,4 @@ go run main.go
 # Placeholder command — replace with actual generator when available
 echo "Generating lexicons..."
 ```
+
