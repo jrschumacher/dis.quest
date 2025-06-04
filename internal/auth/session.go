@@ -38,6 +38,7 @@ func CreateSession(pds, handle, password string) (*CreateSessionResponse, error)
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// TODO: refactor to allow injecting an HTTP client so this can be tested without network access
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
