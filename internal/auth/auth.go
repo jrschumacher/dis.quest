@@ -115,6 +115,5 @@ func GetRefreshTokenCookie(r *http.Request) (string, error) {
 // Exchange code for token
 func ExchangeCodeForToken(ctx context.Context, provider, code, codeVerifier string, cfg *config.Config) (*oauth2.Token, error) {
 	conf := OAuth2Config(provider, cfg)
-	// TODO: allow injecting a custom OAuth2 client for unit testing without hitting the network
 	return conf.Exchange(ctx, code, oauth2.SetAuthURLParam("code_verifier", codeVerifier))
 }
