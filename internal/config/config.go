@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"unicode"
 
 	"github.com/creasty/defaults"
 	"github.com/go-playground/validator/v10"
@@ -122,10 +123,14 @@ func toSnakeCase(str string) string {
 	runes := []rune(str)
 	var out []rune
 	for i, r := range runes {
-		if i > 0 && r >= 'A' && r <= 'Z' {
-			out = append(out, '_')
+		if i > 0 && unicode.IsUpper(r) {
+			prev := runes[i-1]
+			nextLower := i+1 < len(runes) && unicode.IsLower(runes[i+1])
+			if !unicode.IsUpper(prev) || nextLower {
+				out = append(out, '_')
+			}
 		}
-		out = append(out, r)
+		out = append(out, unicode.ToLower(r))
 	}
-	return strings.ToLower(string(out))
+	return string(out)
 }
