@@ -1,0 +1,42 @@
+# Example configuration for dis.quest
+# Copy this file to `config.yaml` and adjust the values as needed.
+
+# Runtime environment. Typically "development" or "production".
+app_env: development
+
+# Port for the HTTP server to listen on.
+port: "3000"
+
+# URL of your PDS (Personal Data Server) instance.
+pds_endpoint: http://localhost:4000
+
+# Database connection string used by the application.
+# Example: postgres://user:pass@localhost:5432/disquest?sslmode=disable
+database_url: postgres://user:pass@localhost:5432/disquest?sslmode=disable
+
+# Private JSON Web Key Set used to sign tokens.
+# Replace with the contents of your private JWKS.
+jwks_private: |
+  {
+    "keys": [
+      # ...your private keys here...
+    ]
+  }
+
+# Public JSON Web Key Set served under /.well-known/jwks.json.
+# Replace with the public portion matching jwks_private.
+jwks_public: |
+  {
+    "keys": [
+      # ...your public keys here...
+    ]
+  }
+
+# Publicly reachable domain for this app (scheme + host).
+public_domain: http://localhost:3000
+
+# Human friendly name displayed in OAuth metadata and UI.
+app_name: dis.quest
+
+# Logging verbosity. One of: DEBUG, INFO, WARN, ERROR.
+log_level: INFO
