@@ -25,11 +25,13 @@ type Config struct {
 	PDSEndpoint string `mapstructure:"pds_endpoint" default:"http://localhost:4000"`
 
 	// Security settings
-	DatabaseURL  string `secret:"true" mapstructure:"database_url"`
-	JWKSPrivate  string `validate:"required" secret:"true" mapstructure:"jwks_private" validate:"required"`
-	JWKSPublic   string `mapstructure:"jwks_public" validate:"required"`
-	PublicDomain string `mapstructure:"public_domain" validate:"required"`
-	AppName      string `mapstructure:"app_name" validate:"required"`
+	DatabaseURL      string `secret:"true" mapstructure:"database_url"`
+	JWKSPrivate      string `validate:"required" secret:"true" mapstructure:"jwks_private" validate:"required"`
+	JWKSPublic       string `mapstructure:"jwks_public" validate:"required"`
+	PublicDomain     string `mapstructure:"public_domain" validate:"required"`
+	AppName          string `mapstructure:"app_name" validate:"required"`
+	OAuthClientID    string `mapstructure:"oauth_client_id" validate:"required"`
+	OAuthRedirectURL string `mapstructure:"oauth_redirect_url" validate:"required"`
 
 	// Logging
 	LogLevel string `default:"INFO" validate:"oneof=DEBUG INFO WARN ERROR"`

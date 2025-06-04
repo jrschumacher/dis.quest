@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"net/http"
 
+	"github.com/jrschumacher/dis.quest/internal/config"
 	"golang.org/x/oauth2"
 )
 
@@ -25,11 +26,11 @@ func GeneratePKCE() (codeVerifier, codeChallenge string, err error) {
 }
 
 // OAuth2 config for Bluesky/ATProto (new OAuth2 flow)
-func OAuth2Config(provider string) *oauth2.Config {
+func OAuth2Config(provider string, cfg *config.Config) *oauth2.Config {
 	return &oauth2.Config{
-		ClientID:     "https://dis.quest/auth/client-metadata.json", // TODO: Use env var or config
-		ClientSecret: "",                                            // Not required for public clients
-		RedirectURL:  "https://dis.quest/auth/callback",             // TODO: Use env var or config
+		ClientID:     cfg.OAuthClientID,
+		ClientSecret: "", // Not required for public clients
+		RedirectURL:  cfg.OAuthRedirectURL,
 		Scopes:       []string{"atproto", "transition:generic"},
 		Endpoint: oauth2.Endpoint{
 			AuthURL:  provider + "/oauth/authorize",
@@ -112,8 +113,8 @@ func GetRefreshTokenCookie(r *http.Request) (string, error) {
 }
 
 // Exchange code for token
-func ExchangeCodeForToken(ctx context.Context, provider, code, codeVerifier string) (*oauth2.Token, error) {
-	conf := OAuth2Config(provider)
+func ExchangeCodeForToken(ctx context.Context, provider, code, codeVerifier string, cfg *config.Config) (*oauth2.Token, error) {
+	conf := OAuth2Config(provider, cfg)
 	// TODO: allow injecting a custom OAuth2 client for unit testing without hitting the network
 	return conf.Exchange(ctx, code, oauth2.SetAuthURLParam("code_verifier", codeVerifier))
 }
