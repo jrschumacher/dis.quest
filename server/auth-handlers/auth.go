@@ -129,7 +129,7 @@ func (rt *AuthRouter) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   true,
 	})
-	conf := auth.OAuth2Config(provider)
+	conf := auth.OAuth2Config(provider, cfg)
 	url := conf.AuthCodeURL(state,
 		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
 		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
@@ -175,8 +175,9 @@ func (rt *AuthRouter) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = dpopKey // TODO: Use for DPoP JWT in token exchange
+	cfg := rt.Router.Config
 	// token, err := auth.ExchangeCodeForTokenWithDPoP(ctx, provider, code, verCookie.Value, dpopKey)
-	token, err := auth.ExchangeCodeForToken(ctx, provider, code, verCookie.Value)
+	token, err := auth.ExchangeCodeForToken(ctx, provider, code, verCookie.Value, cfg)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "Token exchange failed", "handle", handle, "error", err)
 		return
@@ -186,7 +187,6 @@ func (rt *AuthRouter) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		refreshToken = token.RefreshToken
 	}
 	// Use config for secure flag
-	cfg := rt.Router.Config
 	auth.SetSessionCookieWithEnv(w, token.AccessToken, []string{refreshToken}, cfg.AppEnv == "development")
 	http.Redirect(w, r, "/discussion", http.StatusSeeOther)
 }
