@@ -20,4 +20,16 @@ func TestMockService(t *testing.T) {
 	if fetched == nil || fetched.Content != "hello world" {
 		t.Errorf("expected to fetch post with content 'hello world', got %+v", fetched)
 	}
+
+	// set and verify selected answer
+	if err := mock.SetSelectedAnswer(post.ID, "reply-1"); err != nil {
+		t.Fatalf("SetSelectedAnswer failed: %v", err)
+	}
+	fetched, err = mock.GetPost(post.ID)
+	if err != nil {
+		t.Fatalf("GetPost failed: %v", err)
+	}
+	if fetched.SelectedAnswer != "reply-1" {
+		t.Errorf("expected selected answer 'reply-1', got '%s'", fetched.SelectedAnswer)
+	}
 }

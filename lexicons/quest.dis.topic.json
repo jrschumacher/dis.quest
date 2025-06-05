@@ -1,22 +1,49 @@
 {
   "id": "quest.dis.topic",
-  "revision": 1,
+  "revision": 2,
   "description": "Unencrypted discussion thread/topic definition",
   "type": "record",
   "record": {
     "key": "topic",
-    "allow": ["com.atproto.repo.createRecord"]
+    "allow": [
+      "com.atproto.repo.createRecord"
+    ]
   },
   "defs": {
     "main": {
       "type": "object",
-      "required": ["title", "createdBy", "createdAt"],
+      "required": [
+        "title",
+        "createdBy",
+        "createdAt"
+      ],
       "properties": {
-        "title": { "type": "string", "maxLength": 256 },
-        "summary": { "type": "string", "maxLength": 2048 },
-        "tags": { "type": "array", "items": { "type": "string" } },
-        "createdBy": { "type": "string", "format": "did" },
-        "createdAt": { "type": "string", "format": "datetime" }
+        "title": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdBy": {
+          "type": "string",
+          "format": "did"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "datetime"
+        },
+        "selectedAnswer": {
+          "type": "string",
+          "description": "Record ID of the accepted reply"
+        }
       }
     }
   }
