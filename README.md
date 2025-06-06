@@ -1,53 +1,66 @@
-# dis.quest — Go POC for ATProtocol Discussions
+# 🧭 Dis.quest – Structured Discussions on ATProtocol
 
-This project is an experimental implementation of a secure, discussion-style messaging protocol using [ATProtocol](https://atproto.com/) and optionally [OpenTDF](https://github.com/virtru/OpenTDF).
+## Overview
+**Dis.quest** is a structured, topic-based discussion protocol and app view built on top of [ATProtocol](https://atproto.com/). It introduces a GitHub Discussions–style model for decentralized communities, enabling asynchronous conversation around shared topics—scoped by participation, threaded replies, reactions, and optional Q&A flow.
 
-## Features
+While **OpenTDF** integration is supported through optional lexicons, the base protocol and experience are designed to function independently, with a clear separation between public and protected messaging.
 
-- Custom lexicons under `quest.dis.*` and `quest.dis.sec.*`
-- Discussion topics, messages, participation tracking
-- Optional encrypted messaging using OpenTDF-style fields
-- Q&A support via `selectedAnswer` on topics
-- Targeting full PDS/AppView compatibility
-- Written in idiomatic Go
+## Goals
+Dis.quest aims to define a protocol-native way to:
+- Start and organize **topics** scoped around a defined subject
+- Support **replies** and **threads** in a structured conversation
+- Track **participation** and notify followers of updates
+- Enable **optional Q&A**, **reactions**, and **app-level categorization**
+- Provide an idiomatic, reference implementation in **Go**
 
-## Project Background and Purpose
+## Lexicon Namespace
 
-`dis.quest` is a prototype implementation of a discussion-based messaging platform built on ATProtocol. It is designed to model GitHub-style discussions (topics, replies, participation), while optionally supporting encrypted message content using OpenTDF. The project is exploring how decentralized, attribute-based access control (ABAC) can integrate with federated discussion threads.
+| Lexicon ID                     | Purpose                          |
+| ------------------------------ | -------------------------------- |
+| `quest.dis.topic`              | Defines a discussion topic       |
+| `quest.dis.post`               | Contribution post or reply       |
+| `quest.dis.participation`      | Follow or moderation signal      |
+| `quest.dis.sec.*` *(optional)* | OpenTDF-encrypted message fields |
 
-Key architectural ideas include:
-- Each post is a custom record (e.g., `quest.dis.post`) with optional OpenTDF-protected payloads
-- All messages in a thread can be encrypted under a unified OpenTDF policy
-- Embeds (e.g., media blobs) are encrypted and referenced using the ATProto blob store
-- Custom lexicons define topics, messages, participation, and security contexts
+## Key Features
 
-While OpenTDF integration is being explored as part of this prototype, it is not a core feature of the base discussion experience. Instead, it serves as a demonstration of how the ATProtocol and its lexicon system can be extended to support encrypted payloads and attribute-based access control. This includes the ability to define and use additional lexicons that go beyond the app-specific view, opening the door to broader interoperability and experimentation.
+- Topics with title, description, and categories
+- Posts scoped to a topic, supporting threaded replies
+- Participation model for follows and moderation
+- Q&A topics with `selectedAnswer` support
+- Emoji reactions and upvotes
+- Mentions (`@handle`) for user notifications *(planned)*
+- Attachments with optional encryption
+- Defined categories for filtering/browsing
+- Idiomatic Go implementation and PDS/AppView compatibility
 
 ## Scope
 
-This project is intentionally limited in scope to prioritize core discussion features and integration with ATProtocol and OpenTDF.
-
 ### ✅ In Scope
-
-- **Topic** — Represents a discussion subject with an initial message and metadata
-- **Topic Category** — Grouping or classification (e.g., hashtags) to organize topics
-- **Participation** — Opt-in to follow a topic and receive updates or reply notifications
-- **Top-Level Message** — A direct response to a topic
-- **Thread** — Replies to a top-level message, supporting conversational depth
-- **Emoji Reactions** — Non-verbal message responses (e.g., 👍 ❤️ 🔥)
-- **Upvotes** — Lightweight endorsement signal for a message or thread
-- **Q&A Topics** — Threads with an accepted answer (stored in `selectedAnswer`)
-- **Mentions (`@handle`)** — Notifies tagged users (planned)
-- **WebSocket subscriptions** — Realtime updates for followed discussions (planned)
-- **Attachments** — Encrypted media or files associated with a post
-- **Defined Categories** — Predefined list of categories for browsing and filtering topics
+- Discussion topics and structured replies
+- Optional `selectedAnswer` (Q&A-style topics)
+- Threaded replies (shallow depth)
+- Emoji reactions and upvotes
+- Attachment references using ATProto blob store
+- Participation and follower tracking
+- Predefined categories
+- Optional WebSocket-based subscriptions
 
 ### 🚫 Out of Scope
+- Rich text formatting or WYSIWYG editing
+- Direct messaging or group chats
+- Private topics or per-message ACLs
+- Voting-based features (e.g., polls)
 
-- **Polls** — Voting-based discussions
-- **Direct Messaging** — 1:1 or group chat support
-- **Private Threads** — Topics with per-message visibility restrictions
-- **Rich Text Editors** — Markdown/WYSIWYG formatting is deferred to the client layer
+## OpenTDF Integration
+OpenTDF integration is optional and scoped under the `quest.dis.sec.*` lexicons. When enabled, messages and attachments can be encrypted with attribute-based access control policies. This integration demonstrates the extensibility of ATProtocol to support secure messaging—but is not required for base app functionality.
+
+## Future Directions
+- Moderation roles and admin actions
+- Nested threading and reply hierarchies
+- Reaction badges and reputation signals
+- Notification system for active participants
+- Federation-aware topic indexing and search
 
 ## Getting Started
 
