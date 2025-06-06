@@ -17,7 +17,7 @@ var utilCmd = &cobra.Command{
 	Use:     "util",
 	Aliases: []string{"utils"},
 	Short:   "Utility commands for dis.quest",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		fmt.Println("Available utility commands:")
 		fmt.Println("  generate-jwk - Generate JWKs for the application")
 	},
@@ -26,7 +26,7 @@ var utilCmd = &cobra.Command{
 var utilGenerateJWKCmd = &cobra.Command{
 	Use:   "generate-jwk",
 	Short: "Generate JWKs for the application",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		// Generate EC P-256 key using crypto/ecdsa
 		privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		if err != nil {
@@ -50,14 +50,14 @@ var utilGenerateJWKCmd = &cobra.Command{
 		}
 		pubSet := jwk.NewSet()
 		_ = pubSet.AddKey(pubKey)
-		pubJson, _ := json.MarshalIndent(pubSet, "", "  ")
-		_ = os.WriteFile("jwks.public.json", pubJson, 0600)
+		pubJSON, _ := json.MarshalIndent(pubSet, "", "  ")
+		_ = os.WriteFile("jwks.public.json", pubJSON, 0600)
 
 		// Export private key
 		privSet := jwk.NewSet()
 		_ = privSet.AddKey(key)
-		privJson, _ := json.MarshalIndent(privSet, "", "  ")
-		_ = os.WriteFile("jwks.private.json", privJson, 0600)
+		privJSON, _ := json.MarshalIndent(privSet, "", "  ")
+		_ = os.WriteFile("jwks.private.json", privJSON, 0600)
 
 		fmt.Println("JWKs written to jwks.public.json and jwks.private.json")
 	},

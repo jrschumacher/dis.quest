@@ -12,7 +12,7 @@ import (
 var genLexiconsCmd = &cobra.Command{
 	Use:   "gen-lexicons",
 	Short: "Generate pretty-printed lexicon JSON files under api/disquest",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		lexiconDir := "lexicons"
 		outputDir := "api/disquest"
 
@@ -33,6 +33,12 @@ var genLexiconsCmd = &cobra.Command{
 			}
 			inPath := filepath.Join(lexiconDir, file.Name())
 			outPath := filepath.Join(outputDir, file.Name())
+
+			// Validate that the path is within the expected directory
+			if !filepath.HasPrefix(filepath.Clean(inPath), filepath.Clean(lexiconDir)) {
+				fmt.Fprintf(os.Stderr, "Invalid file path: %s\n", inPath)
+				continue
+			}
 
 			data, err := os.ReadFile(inPath)
 			if err != nil {

@@ -42,7 +42,7 @@ func RegisterRoutes(mux *http.ServeMux, baseRoute string, cfg *config.Config) {
 	mux.HandleFunc(baseRoute+"/"+jwksFilename, router.JWKSHandler)
 }
 
-func (rt *WellKnownRouter) WellKnownHandler(w http.ResponseWriter, r *http.Request) {
+func (rt *WellKnownRouter) WellKnownHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ok","message":"Well-known endpoint"}`))

@@ -192,7 +192,7 @@ func (rt *AuthRouter) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Serve the OAuth client metadata JSON for Bluesky
-func (rt *AuthRouter) ClientMetadataHandler(w http.ResponseWriter, r *http.Request) {
+func (rt *AuthRouter) ClientMetadataHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{
