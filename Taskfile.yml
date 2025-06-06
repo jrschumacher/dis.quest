@@ -9,6 +9,7 @@ tasks:
   build:
     cmds:
       - templ generate
+      - sqlc generate
       - go build -o bin/disquest ./
 
   docker:
@@ -29,3 +30,36 @@ tasks:
     cmds:
       - air
     silent: false
+
+  # Database commands
+  db-migrate:
+    desc: Run database migrations
+    cmds:
+      - tern migrate
+
+  db-rollback:
+    desc: Rollback last database migration
+    cmds:
+      - tern migrate --destination -1
+
+  db-reset:
+    desc: Reset database to clean state
+    cmds:
+      - tern migrate --destination 0
+      - tern migrate
+
+  db-status:
+    desc: Show database migration status
+    cmds:
+      - tern status
+
+  generate:
+    desc: Generate all code (templ + sqlc)
+    cmds:
+      - templ generate
+      - sqlc generate
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run
