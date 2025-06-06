@@ -1,12 +1,93 @@
 version: '3'
 
 tasks:
+  default:
+    desc: Welcome to dis.quest
+    silent: true
+    cmds:
+      - task: welcome
+  # Check if required tools are installed
+  check-tools:
+    desc: Check if required tools are installed
+    cmds:
+      - |
+        echo "Checking required tools..."
+        missing_tools=""
+
+        if ! command -v templ &> /dev/null; then
+          echo "❌ templ not found"
+          missing_tools="$missing_tools templ"
+        else
+          echo "✅ templ found"
+        fi
+
+        if ! command -v sqlc &> /dev/null; then
+          echo "❌ sqlc not found"
+          missing_tools="$missing_tools sqlc"
+        else
+          echo "✅ sqlc found"
+        fi
+
+        if ! command -v golangci-lint &> /dev/null; then
+          echo "⚠️  golangci-lint not found (optional but recommended)"
+        else
+          echo "✅ golangci-lint found"
+        fi
+
+        if ! command -v gh &> /dev/null; then
+          echo "⚠️  gh (GitHub CLI) not found (optional but recommended for issue/PR workflow)"
+        else
+          echo "✅ gh found"
+        fi
+
+        if [ -n "$missing_tools" ]; then
+          echo ""
+          echo "Missing required tools:$missing_tools"
+          echo "Run 'task install-tools' to install them"
+          exit 1
+        else
+          echo "✅ All required tools are available"
+        fi
+
+  # Install required tools
+  install-tools:
+    desc: Install required development tools
+    cmds:
+      - go install github.com/a-h/templ/cmd/templ@latest
+      - go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+      - |
+        if ! command -v golangci-lint &> /dev/null; then
+          echo "Installing golangci-lint..."
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.0.0
+        fi
+      - |
+        if ! command -v gh &> /dev/null; then
+          echo "Installing GitHub CLI..."
+          if [[ "$OSTYPE" == "darwin"* ]]; then
+            if command -v brew &> /dev/null; then
+              brew install gh
+            else
+              echo "⚠️  Homebrew not found. Please install GitHub CLI manually: https://cli.github.com/"
+            fi
+          elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+            sudo apt update
+            sudo apt install gh
+          else
+            echo "⚠️  Please install GitHub CLI manually for your OS: https://cli.github.com/"
+          fi
+        fi
+      - echo "✅ All tools installed successfully"
+
   run:
+    deps: [check-tools]
     cmds:
       - go run . start
     silent: true
 
   build:
+    deps: [check-tools]
     cmds:
       - templ generate
       - sqlc generate
@@ -55,6 +136,7 @@ tasks:
 
   generate:
     desc: Generate all code (templ + sqlc)
+    deps: [check-tools]
     cmds:
       - templ generate
       - sqlc generate
@@ -63,3 +145,361 @@ tasks:
     desc: Run golangci-lint
     cmds:
       - golangci-lint run
+
+  # GitHub workflow tasks
+  worktree-dev:
+    desc: Create worktree for GitHub issue development
+    summary: |
+      Creates a new worktree for developing a GitHub issue.
+      Usage: task worktree-dev ISSUE=123
+      This creates a worktree in ../dis.quest-issue-123/ with branch issue-123
+    vars:
+      ISSUE: '{{.ISSUE | default ""}}'
+      BRANCH_NAME: 'issue-{{.ISSUE}}'
+      WORKTREE_PATH: '../dis.quest-{{.BRANCH_NAME}}'
+    preconditions:
+      - sh: '[ -n "{{.ISSUE}}" ]'
+        msg: 'Please provide an issue number - task worktree-dev ISSUE=123'
+      - sh: 'command -v gh &> /dev/null'
+        msg: 'GitHub CLI (gh) is required. Run "task install-tools" to install it.'
+    cmds:
+      - echo "Creating worktree for issue #{{.ISSUE}}..."
+      - gh issue view {{.ISSUE}} --json title,url
+      - git worktree add {{.WORKTREE_PATH}} -b {{.BRANCH_NAME}}
+      - echo "Worktree created at {{.WORKTREE_PATH}}"
+      - echo "To switch cd {{.WORKTREE_PATH}}"
+
+  worktree-list:
+    desc: List all active worktrees
+    cmds:
+      - git worktree list
+
+  worktree-cleanup:
+    desc: Clean up merged worktree and branch
+    summary: |
+      Cleans up a worktree and its associated branch after PR merge.
+      Usage: task worktree-cleanup BRANCH=issue-123
+    vars:
+      BRANCH: '{{.BRANCH | default ""}}'
+      WORKTREE_PATH: '../dis.quest-{{.BRANCH}}'
+    preconditions:
+      - sh: '[ -n "{{.BRANCH}}" ]'
+        msg: 'Please provide a branch name task worktree-cleanup BRANCH=issue-123'
+    cmds:
+      - echo "Cleaning up worktree for branch {{.BRANCH}}..."
+      - git worktree remove {{.WORKTREE_PATH}} || echo "Worktree already removed"
+      - git branch -d {{.BRANCH}} || echo "Branch already deleted or not merged"
+      - git remote prune origin
+      - echo "✅ Cleanup complete"
+
+  pr-create:
+    desc: Create pull request from current branch
+    cmds:
+      - gh pr create
+
+  pr-list:
+    desc: List open pull requests
+    cmds:
+      - gh pr list
+
+  issue-list:
+    desc: List open GitHub issues
+    cmds:
+      - gh issue list
+
+  issue-create:
+    desc: Create new GitHub issue
+    cmds:
+      - gh issue create
+
+  # Development workflow optimizations
+  dev-check:
+    desc: Run complete development quality checks
+    summary: |
+      Runs all code generation, linting, and testing in sequence.
+      This is the "ready to commit" check that ensures code quality.
+    cmds:
+      - echo "🔄 Generating code..."
+      - templ generate
+      - sqlc generate
+      - echo "🔍 Running linter..."
+      - golangci-lint run
+      - echo "🧪 Running tests..."
+      - go test ./...
+      - echo "✅ All checks passed! Ready to commit."
+
+  dev-setup:
+    desc: Complete development environment setup
+    summary: |
+      Sets up a complete development environment including:
+      - Tool installation and verification
+      - Git hooks setup
+      - Code generation
+    cmds:
+      - task: install-tools
+      - task: check-tools
+      - echo "🪝 Setting up git hooks..."
+      - lefthook install || echo "⚠️  lefthook not available, skipping git hooks"
+      - echo "🔄 Initial code generation..."
+      - task: generate
+      - echo "✅ Development environment ready!"
+
+  git-cleanup:
+    desc: Clean up all stale git branches and worktrees
+    summary: |
+      Performs comprehensive git cleanup:
+      - Lists and optionally removes stale worktrees
+      - Deletes merged local branches
+      - Prunes stale remote-tracking branches
+    cmds:
+      - echo "🧹 Cleaning up git repository..."
+      - echo "📋 Current worktrees:"
+      - git worktree list
+      - echo "🔄 Pruning remote branches..."
+      - git remote prune origin
+      - echo "📋 Merged branches that can be deleted:"
+      - git branch --merged main | grep -v main | grep -v '*' || echo "No merged branches to clean"
+      - echo "To delete merged branches run - git branch --merged main | grep -v main | xargs -n 1 git branch -d"
+
+  commit-check:
+    desc: Pre-commit validation (run before committing)
+    summary: |
+      Validates code before committing:
+      - Ensures generated files are up to date
+      - Runs linting and tests
+      - Checks for common issues
+    cmds:
+      - echo "🔍 Pre-commit validation..."
+      - task: dev-check
+      - echo "📝 Checking for uncommitted generated files..."
+      - git status --porcelain | grep "_templ.go" && echo "⚠️  Uncommitted templ files found" || echo "✅ Generated files are clean"
+      - echo "✅ Ready to commit!"
+
+  branch-status:
+    desc: Show comprehensive branch and worktree status
+    cmds:
+      - echo "📋 Repository Status:"
+      - echo "Current branch - $(git branch --show-current)"
+      - echo ""
+      - echo "📁 Active worktrees:"
+      - git worktree list
+      - echo ""
+      - echo "🌿 Local branches:"
+      - git branch -vv
+      - echo ""
+      - echo "📊 Repository state:"
+      - git status --short
+
+  dev-reset:
+    desc: Reset development environment to clean state
+    summary: |
+      Resets the development environment:
+      - Regenerates all code
+      - Cleans build artifacts
+      - Shows current status
+    cmds:
+      - echo "🔄 Resetting development environment..."
+      - rm -rf bin/ || echo "No bin directory to clean"
+      - echo "🔄 Regenerating code..."
+      - task: generate
+      - echo "🔍 Running quality checks..."
+      - task: dev-check
+      - echo "✅ Development environment reset complete!"
+
+  quick-fix:
+    desc: Quick development iteration (generate + lint only)
+    summary: |
+      Fast development check for quick iterations:
+      - Generates code
+      - Runs linter
+      - Skips tests for speed
+    cmds:
+      - echo "⚡ Quick development check..."
+      - templ generate
+      - sqlc generate
+      - golangci-lint run
+      - echo "✅ Quick check complete!"
+
+  # Claude Code assistance tasks
+  claude-context:
+    desc: Show project context information for Claude Code
+    summary: |
+      Displays comprehensive project information to help Claude Code
+      understand the current state and provide better assistance.
+    cmds:
+      - echo "📋 PROJECT CONTEXT FOR CLAUDE CODE"
+      - echo "=================================="
+      - echo ""
+      - echo "🏗️  PROJECT STRUCTURE:"
+      - echo "Current directory - $(pwd)"
+      - echo "Git status -"
+      - git status --short || echo "Not a git repository"
+      - echo ""
+      - echo "📁 KEY FILES STATUS:"
+      - echo "CLAUDE.md last modified - $(stat -f %Sm -t %Y-%m-%d\ %H:%M CLAUDE.md 2>/dev/null || echo 'File not found')"
+      - echo "Taskfile.yml last modified - $(stat -f %Sm -t %Y-%m-%d\ %H:%M Taskfile.yml 2>/dev/null || echo 'File not found')"
+      - echo ""
+      - echo "🌿 CURRENT BRANCH - $(git branch --show-current 2>/dev/null || echo 'Unknown')"
+      - echo "📊 WORKTREES:"
+      - git worktree list 2>/dev/null || echo "No worktrees or not a git repo"
+      - echo ""
+      - echo "🛠️  TOOLS STATUS:"
+      - task check-tools
+      - echo ""
+      - echo "📝 RECENT COMMITS:"
+      - git log --oneline -5 2>/dev/null || echo "No git history"
+
+  claude-summary:
+    desc: Generate project summary for Claude Code
+    summary: |
+      Creates a concise project summary including:
+      - Current state
+      - Key files
+      - Recent changes
+      - Development status
+    cmds:
+      - echo "📄 PROJECT SUMMARY FOR CLAUDE CODE"
+      - echo "==================================="
+      - echo ""
+      - echo "Project - dis.quest - ATProtocol Discussion Platform"
+      - echo "Current branch - $(git branch --show-current 2>/dev/null || echo 'Unknown')"
+      - echo "Working directory - $(pwd)"
+      - echo ""
+      - echo "🔄 RECENT ACTIVITY:"
+      - git log --oneline -3 --no-merges 2>/dev/null | head -3 || echo "No recent commits"
+      - echo ""
+      - echo "📋 OPEN ISSUES:"
+      - gh issue list --limit 5 2>/dev/null || echo "GitHub CLI not available or not configured"
+      - echo ""
+      - echo "🎯 CURRENT FOCUS:"
+      - echo "- Last modified - CLAUDE.md ($(stat -f %Sm -t %Y-%m-%d CLAUDE.md 2>/dev/null || echo 'unknown'))"
+      - echo "- Task automation - $(grep -c 'desc:' Taskfile.yml) tasks available"
+      - echo "- Linter status - $(golangci-lint --version 2>/dev/null | head -1 || echo 'Not available')"
+
+  docs-status:
+    desc: Check documentation freshness and completeness
+    summary: |
+      Reviews documentation status to help identify what needs updating:
+      - CLAUDE.md currency
+      - README.md status
+      - Task documentation coverage
+    cmds:
+      - echo "📚 DOCUMENTATION STATUS"
+      - echo "======================="
+      - echo ""
+      - echo "📝 CLAUDE.md:"
+      - echo "  Last modified - $(stat -f %Sm -t %Y-%m-%d\ %H:%M CLAUDE.md 2>/dev/null || echo 'File not found')"
+      - echo "  Size - $(wc -l < CLAUDE.md 2>/dev/null || echo '0') lines"
+      - echo "  Key sections present -"
+      - grep "^##" CLAUDE.md | head -5 || echo "  No sections found"
+      - echo ""
+      - echo "📖 README.md:"
+      - echo "  Status - $([ -f README.md ] && echo 'Present' || echo 'Missing')"
+      - if [ -f README.md ]; then echo "  Last modified - $(stat -f %Sm -t %Y-%m-%d\ %H:%M README.md)"; fi
+      - echo ""
+      - echo "⚙️  TASKFILE DOCUMENTATION:"
+      - echo "  Total tasks - $(grep -c 'desc:' Taskfile.yml)"
+      - echo "  Tasks with summaries - $(grep -c 'summary:' Taskfile.yml)"
+      - echo "  Coverage - $(echo "scale=1; $(grep -c 'summary:' Taskfile.yml) * 100 / $(grep -c 'desc:' Taskfile.yml)" | bc 2>/dev/null || echo 'N/A')% documented"
+
+  project-health:
+    desc: Comprehensive project health check for Claude Code
+    summary: |
+      Runs all health checks to give Claude Code a complete picture:
+      - Tool status
+      - Documentation status
+      - Git status
+      - Development workflow status
+    cmds:
+      - echo "🏥 PROJECT HEALTH CHECK"
+      - echo "======================="
+      - task: docs-status
+      - echo ""
+      - task: branch-status
+      - echo ""
+      - echo "🎯 NEXT SUGGESTED ACTIONS:"
+      - echo "  - Run 'task dev-check' if code changes made"
+      - echo "  - Run 'task git-cleanup' if many stale branches"
+      - echo "  - Update CLAUDE.md if workflow changed"
+      - echo "  - Create issue with 'task issue-create' for new work"
+
+  help-claude:
+    desc: Show commands most useful for Claude Code assistance
+    silent: true
+    summary: |
+      Quick reference of tasks that help Claude Code provide better assistance.
+      Use these when Claude Code asks about project status or needs context.
+    cmds:
+      - echo "🤖 CLAUDE CODE ASSISTANCE COMMANDS"
+      - echo "===================================="
+      - echo ""
+      - echo "📋 For Project Context:"
+      - echo "  task claude-context     # Full project status"
+      - echo "  task claude-summary     # Concise project overview"
+      - echo "  task project-health     # Comprehensive health check"
+      - echo ""
+      - echo "📚 For Documentation:"
+      - echo "  task docs-status        # Check doc freshness"
+      - echo "  task branch-status      # Git and worktree status"
+      - echo ""
+      - echo "🔧 For Development:"
+      - echo "  task dev-check          # Quality validation"
+      - echo "  task issue-list         # Current work items"
+      - echo "  task worktree-list      # Active development"
+      - echo ""
+      - echo "💡 TIP Run 'task claude-context' when starting a session"
+      - echo "    to give Claude Code the best understanding of your project!"
+
+  # Help and quickstart tasks
+  help:
+    desc: Show comprehensive project help and quickstart guide
+    summary: |
+      Displays the quickstart guide using a pager (more/less).
+      Perfect for new contributors or as a reference.
+    cmds:
+      - |
+        if command -v less &> /dev/null; then
+          less QUICKSTART.md
+        elif command -v more &> /dev/null; then
+          more QUICKSTART.md
+        else
+          cat QUICKSTART.md
+        fi
+
+  quickstart:
+    desc: Launch interactive quickstart guide
+    summary: |
+      Opens the comprehensive quickstart guide in a pager.
+      Covers first-time setup, daily workflow, and essential commands.
+    cmds:
+      - task: help
+
+  welcome:
+    desc: Show welcome message for new contributors
+    silent: true
+    summary: |
+      Brief welcome message with next steps for getting started.
+    cmds:
+      - echo "🎉 Welcome to dis.quest!"
+      - echo "======================="
+      - echo ""
+      - echo "ATProtocol Discussion Platform built with Go"
+      - echo ""
+      - echo "🚀 First time here? Run:"
+      - echo "   task quickstart    - Interactive guide"
+      - echo "   task dev-setup     - Setup environment"
+      - echo ""
+      - echo "📋 Daily development:"
+      - echo "   task issue-list    - See available work"
+      - echo "   task dev-check     - Quality validation"
+      - echo ""
+      - echo "🤖 Working with Claude Code:"
+      - echo "   task claude-context    - Provide project context"
+      - echo "   task help-claude       - Show assistance commands"
+      - echo "   See HUMAN.md for advanced prompting techniques"
+      - echo ""
+      - echo "📚 Need more help?"
+      - echo "   task --list        - All available commands"
+      - echo "   task project-health    - Project status"
+      - echo ""
+      - echo "Happy coding! 🎯"

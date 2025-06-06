@@ -21,5 +21,5 @@ func RegisterRoutes(mux *http.ServeMux, baseRoute string, cfg *config.Config) {
 // HealthHandler responds to /health requests for health checks
 func (rt *HealthRouter) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
-	fmt.Fprintln(w, "ok")
+	_, _ = fmt.Fprintln(w, "ok")
 }

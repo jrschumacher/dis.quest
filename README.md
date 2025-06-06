@@ -51,11 +51,63 @@ This project is intentionally limited in scope to prioritize core discussion fea
 
 ## Getting Started
 
+### First-Time Setup
 ```bash
-# Start the local dev server
-go run main.go
-
-# (Optional) Generate lexicons
-# Placeholder command — replace with actual generator when available
-echo "Generating lexicons..."
+# Complete development environment setup
+task dev-setup
 ```
+
+### Development Workflow
+```bash
+# Start new feature from GitHub issue
+task worktree-dev ISSUE=123
+
+# Daily development cycle
+task dev-check                 # Generate code + lint + test
+task commit-check              # Validate before committing
+task pr-create                 # Submit pull request
+
+# After PR merge
+task worktree-cleanup BRANCH=issue-123
+```
+
+### Running the Application
+```bash
+# Start the server (multiple options)
+task run                       # Using Taskfile (recommended)
+go run main.go                 # Direct Go execution
+make run                       # Using Makefile
+```
+
+### Getting Help
+```bash
+task welcome                   # Welcome message and quick start
+task quickstart                # Interactive quickstart guide
+task help                      # Comprehensive help (opens in pager)
+task --list                    # Show all available tasks
+task help-claude               # Commands for Claude Code assistance
+```
+
+## Working with Claude Code
+
+This project is optimized for collaboration with [Claude Code](https://claude.ai/code). For best results:
+
+### Starting a Session
+```bash
+task claude-context           # Provide complete project context to Claude Code
+```
+
+### Getting Help
+```bash
+task project-health           # Comprehensive project status
+task docs-status              # Check documentation freshness
+task help-claude              # Show Claude Code assistance commands
+```
+
+### Development Best Practices
+- Use `task` commands instead of manual git/tool operations
+- Run `task dev-check` before committing
+- Keep `CLAUDE.md` as the authoritative development guide
+- Use GitHub issues and worktrees for feature development
+
+See `CLAUDE.md` for complete development workflow documentation.

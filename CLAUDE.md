@@ -35,6 +35,9 @@ make build             # Standard go build to bin/disquest
 # Code generation (required before building)
 templ generate         # Generates Go code from .templ files
 sqlc generate          # Generates Go code from SQL queries
+
+# Git hooks setup (one-time)
+lefthook install       # Install git hooks for automatic quality checks
 ```
 
 ### Testing and Quality
@@ -44,9 +47,42 @@ go test ./...          # Direct Go test command
 task test             # Via Taskfile
 make test             # Via Makefile
 
-# Linting and formatting
+# Getting started
+task welcome          # Welcome message for new contributors
+task quickstart       # Interactive quickstart guide
+task help             # Comprehensive help (opens in pager)
+
+# Development workflow shortcuts
+task dev-check        # Complete QA check (generate + lint + test)
+task quick-fix        # Fast iteration (generate + lint only)
+task commit-check     # Pre-commit validation
+task dev-setup        # Complete environment setup
+task dev-reset        # Reset environment to clean state
+
+# Repository management
+task branch-status    # Show comprehensive repo status
+task git-cleanup      # Clean up stale branches and worktrees
+
+# Traditional commands (still available)
 make lint             # Run golangci-lint v2 with comprehensive checks
 make format           # Format with goimports
+
+# GitHub issue management (via Task)
+task issue-list       # List open issues
+task issue-create     # Create new issue
+gh issue view <num>   # View specific issue
+gh issue close <num>  # Close completed issue
+
+# Development workflow with worktrees (via Task)
+task worktree-dev ISSUE=<num>     # Create worktree from GitHub issue number
+task worktree-list                # List all worktrees
+task worktree-cleanup BRANCH=<name>  # Clean up worktree and branch after PR merge
+
+# Pull request management (via Task)
+task pr-create        # Create PR from current branch
+task pr-list          # List open PRs
+gh pr view <num>      # View specific PR
+gh pr merge <num>     # Merge PR (consider using --squash or --rebase)
 ```
 
 ## Architecture Overview
@@ -133,6 +169,21 @@ The application defines custom lexicons under `quest.dis.*`:
 
 ## Development Workflow
 
+### First-Time Setup
+For new contributors or clean environments:
+```bash
+task dev-setup        # Complete environment setup (tools + hooks + generation)
+```
+This replaces manual tool installation, git hooks setup, and initial code generation.
+
+### Issue-Based Development
+1. **Create/Select Issue**: Use `task issue-create` or `task issue-list` to manage work
+2. **Create Worktree**: Use `task worktree-dev ISSUE=<number>` to create a dedicated worktree
+3. **Develop**: Work in the isolated worktree environment (created in `../dis.quest-issue-<num>/`)
+4. **Link Commits**: Use `fixes #<issue-number>` or `closes #<issue-number>` in commit messages
+5. **Create PR**: Use `task pr-create` when ready to merge back to main
+6. **Post-Merge Cleanup**: Use `task worktree-cleanup BRANCH=issue-<number>` to clean up worktree and branches automatically
+
 ### Template Development
 1. Edit `.templ` files in `components/`
 2. Run `templ generate` to create corresponding `_templ.go` files
@@ -147,18 +198,43 @@ The application defines custom lexicons under `quest.dis.*`:
 5. Test with SQLite locally, deploy with configurable database
 
 ### Standard Development Cycle
-1. Make your changes (code, templates, SQL, etc.)
-2. Run any required code generation (`templ generate`, `sqlc generate`)
-3. **MANDATORY: Run `golangci-lint run` and fix all issues**
-4. Run tests: `go test ./...`
-5. Commit with conventional commit message
+1. **Start with Issue**: Use `task worktree-dev ISSUE=<number>` for isolated development
+2. Make your changes (code, templates, SQL, etc.)
+3. **Quality Check**: Use `task dev-check` (replaces steps 3-5 below)
+   - Alternative: `task quick-fix` for faster iteration without tests
+4. Commit with conventional commit message (use `task commit-check` for validation)
+5. **Create PR**: Use `task pr-create` to submit for review
+6. **Cleanup**: After PR merge, use `task worktree-cleanup BRANCH=issue-<number>`
+
+### Legacy Development Cycle (manual steps)
+1. Run any required code generation (`templ generate`, `sqlc generate`)
+2. **MANDATORY: Run `golangci-lint run` and fix all issues**
+3. Run tests: `go test ./...`
 
 ### Code Quality Requirements
-- Follow Conventional Commits for all commit messages and PR titles
-- Run `goimports` before committing (handles both formatting and import management)
-- If `.templ` files are changed, run `templ generate`
+- **Conventional Commits**: Use simple format without scopes: `type: description`
+  - Types: `feat`, `fix`, `chore`, `docs`, `style`, `refactor`, `test`, `perf`, `ci`, `build`, `revert`
+  - Examples: `feat: add user authentication`, `fix: resolve database connection issue`, `chore: update dependencies`
+- **Automated Quality Checks**: Lefthook git hooks handle most quality checks automatically
+- Manual checks (if not using lefthook): Run `goimports`, `templ generate`, `sqlc generate`, and `golangci-lint run`
 - **CRITICAL**: Always run `golangci-lint run` after ANY unit of work (feature, bug fix, refactor)
 - Always test before submitting: `go test ./...`
+
+### Git Hooks (Lefthook)
+Pre-commit hooks automatically:
+- Format Go code with goimports
+- Generate templ and SQLC code when files change
+- Run golangci-lint with auto-fix
+- Check for TODO/FIXME comments
+
+Pre-push hooks automatically:
+- Run full test suite
+- Verify build works
+- Ensure generated files are up to date
+
+Commit message validation:
+- Enforces simple conventional commit format: `type: description`
+- No scopes required, keeps commits simple and consistent
 
 ### Generated Files (Must Be Committed)
 - `*_templ.go` files generated from Templ templates
@@ -168,6 +244,74 @@ The application defines custom lexicons under `quest.dis.*`:
 - Requires valid Bluesky OAuth client configuration
 - Test endpoints available at `/auth/*` paths
 - Health checks at `/health/*` for service monitoring
+
+## Quick Reference
+
+### Most Common Tasks
+```bash
+# First time setup
+task dev-setup
+
+# Daily development
+task worktree-dev ISSUE=123    # Start new feature
+task dev-check                 # Ready to commit?
+task pr-create                 # Submit for review
+task worktree-cleanup BRANCH=issue-123  # After merge
+
+# Troubleshooting
+task branch-status             # What's my status?
+task git-cleanup               # Clean up repo
+task dev-reset                 # Reset environment
+```
+
+### Emergency Commands
+```bash
+task quick-fix                 # Fast check (no tests)
+task commit-check              # Validate before commit
+task check-tools               # Verify tool installation
+```
+
+### Claude Code Assistance
+To help Claude Code provide better assistance, use these commands:
+```bash
+task claude-context           # Full project context for Claude Code
+task claude-summary           # Concise project overview
+task project-health           # Comprehensive health check
+task docs-status              # Documentation freshness check
+task help-claude              # Show all Claude Code assistance commands
+```
+
+**Recommended:** Run `task claude-context` at the start of Claude Code sessions to provide complete project context.
+
+## Working with Claude Code
+
+### Starting a Session
+For optimal Claude Code assistance, provide context at the beginning of each session:
+```bash
+task claude-context    # Gives Claude Code complete project awareness
+```
+
+### During Development
+When Claude Code asks about project status or needs updates:
+```bash
+task project-health    # Comprehensive health check
+task docs-status       # Check if documentation needs updating
+task branch-status     # Current git and worktree status
+```
+
+### Before Making Changes
+Help Claude Code understand current state:
+```bash
+task claude-summary    # Concise overview of current project state
+task issue-list        # Show current work items
+```
+
+### Optimizing Collaboration
+- **Use `task` commands instead of manual git/tool commands** - More efficient, reduces token usage
+- **Run `task docs-status`** when asked about documentation updates
+- **Use `task help-claude`** to remind yourself of available assistance commands
+- **Keep CLAUDE.md updated** as the single source of truth for project workflow
+- **See `HUMAN.md`** for advanced prompting techniques and hashtag shortcuts for Claude Code
 
 ## Testing Strategy
 

@@ -26,7 +26,7 @@ type Config struct {
 
 	// Security settings
 	DatabaseURL      string `secret:"true" mapstructure:"database_url"`
-	JWKSPrivate      string `validate:"required" secret:"true" mapstructure:"jwks_private" validate:"required"`
+	JWKSPrivate      string `validate:"required" secret:"true" mapstructure:"jwks_private"`
 	JWKSPublic       string `mapstructure:"jwks_public" validate:"required"`
 	PublicDomain     string `mapstructure:"public_domain" validate:"required"`
 	AppName          string `mapstructure:"app_name" validate:"required"`
@@ -63,7 +63,7 @@ func Load() *Config {
 		if key == "" {
 			key = toSnakeCase(field.Name)
 		}
-		v.BindEnv(key)
+		_ = v.BindEnv(key)
 	}
 
 	// Read config file if it exists
@@ -123,7 +123,7 @@ func toString(v interface{}) string {
 // toSnakeCase converts CamelCase to snake_case
 func toSnakeCase(str string) string {
 	runes := []rune(str)
-	var out []rune
+	out := make([]rune, 0, len(runes))
 	for i, r := range runes {
 		if i > 0 && unicode.IsUpper(r) {
 			prev := runes[i-1]

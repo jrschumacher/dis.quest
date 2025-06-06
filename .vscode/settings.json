@@ -1,0 +1,76 @@
+{
+  // Go configuration
+  "go.lintTool": "golangci-lint",
+  "go.lintFlags": ["--config=.golangci.yml"],
+  "go.useLanguageServer": true,
+  "go.formatTool": "goimports",
+  "go.generateTestsFlags": ["-parallel"],
+  
+  // Format on save
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit"
+  },
+  
+  // File associations
+  "files.associations": {
+    "*.templ": "html",
+    "*.sql": "sql",
+    "Taskfile.yml": "yaml",
+    "lefthook.yml": "yaml"
+  },
+  
+  // Git
+  "git.autofetch": true,
+  "git.enableSmartCommit": true,
+  
+  // Editor settings
+  "editor.rulers": [100],
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": true,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  
+  // Exclude generated files from search
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/bin": true,
+    "**/*_templ.go": true,
+    "**/internal/db/db.go": true,
+    "**/internal/db/models.go": true,
+    "**/internal/db/querier.go": true
+  },
+  
+  // File watcher excludes for performance
+  "files.watcherExclude": {
+    "**/bin/**": true,
+    "**/*_templ.go": true,
+    "**/internal/db/db.go": true,
+    "**/internal/db/models.go": true,
+    "**/internal/db/querier.go": true
+  },
+  
+  // Language specific settings
+  "[go]": {
+    "editor.insertSpaces": false,
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  
+  "[yaml]": {
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  },
+  
+  "[sql]": {
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  },
+  
+  "[html]": {
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  }
+}

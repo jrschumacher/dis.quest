@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -17,12 +16,12 @@ var genLexiconsCmd = &cobra.Command{
 		lexiconDir := "lexicons"
 		outputDir := "api/disquest"
 
-		if err := os.MkdirAll(outputDir, 0755); err != nil {
+		if err := os.MkdirAll(outputDir, 0750); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to create output dir: %v\n", err)
 			os.Exit(1)
 		}
 
-		files, err := ioutil.ReadDir(lexiconDir)
+		files, err := os.ReadDir(lexiconDir)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to read lexicon dir: %v\n", err)
 			os.Exit(1)
@@ -35,7 +34,7 @@ var genLexiconsCmd = &cobra.Command{
 			inPath := filepath.Join(lexiconDir, file.Name())
 			outPath := filepath.Join(outputDir, file.Name())
 
-			data, err := ioutil.ReadFile(inPath)
+			data, err := os.ReadFile(inPath)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to read %s: %v\n", inPath, err)
 				continue
@@ -53,7 +52,7 @@ var genLexiconsCmd = &cobra.Command{
 				continue
 			}
 
-			if err := ioutil.WriteFile(outPath, pretty, 0644); err != nil {
+			if err := os.WriteFile(outPath, pretty, 0600); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", outPath, err)
 				continue
 			}

@@ -51,7 +51,7 @@ var utilGenerateJWKCmd = &cobra.Command{
 		pubSet := jwk.NewSet()
 		_ = pubSet.AddKey(pubKey)
 		pubJson, _ := json.MarshalIndent(pubSet, "", "  ")
-		_ = os.WriteFile("jwks.public.json", pubJson, 0644)
+		_ = os.WriteFile("jwks.public.json", pubJson, 0600)
 
 		// Export private key
 		privSet := jwk.NewSet()

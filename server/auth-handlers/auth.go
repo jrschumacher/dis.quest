@@ -103,7 +103,7 @@ func (rt *AuthRouter) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to generate DPoP keypair", "handle", handle, "error", err)
 		return
 	}
-	cfg := rt.Router.Config
+	cfg := rt.Config
 	if err := auth.SetDPoPKeyCookie(w, dpopKey.PrivateKey, cfg.AppEnv == "development"); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to set DPoP key cookie", "handle", handle, "error", err)
 		return
@@ -175,7 +175,7 @@ func (rt *AuthRouter) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = dpopKey // TODO: Use for DPoP JWT in token exchange
-	cfg := rt.Router.Config
+	cfg := rt.Config
 	// token, err := auth.ExchangeCodeForTokenWithDPoP(ctx, provider, code, verCookie.Value, dpopKey)
 	token, err := auth.ExchangeCodeForToken(ctx, provider, code, verCookie.Value, cfg)
 	if err != nil {
@@ -195,7 +195,7 @@ func (rt *AuthRouter) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 func (rt *AuthRouter) ClientMetadataHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{
+	_, _ = w.Write([]byte(`{
 	  "client_id": "https://dis.quest/auth/client-metadata.json",
 	  "client_name": "dis.quest",
 	  "client_uri": "https://dis.quest",

@@ -45,13 +45,13 @@ func RegisterRoutes(mux *http.ServeMux, baseRoute string, cfg *config.Config) {
 func (rt *WellKnownRouter) WellKnownHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"ok","message":"Well-known endpoint"}`))
+	_, _ = w.Write([]byte(`{"status":"ok","message":"Well-known endpoint"}`))
 }
 
 func (rt *WellKnownRouter) BlueskyClientMetadataHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	publicDomain := rt.Router.Config.PublicDomain
-	appName := rt.Router.Config.AppName
+	publicDomain := rt.Config.PublicDomain
+	appName := rt.Config.AppName
 	metadata := BlueskyClientMetadata{
 		ClientID:                publicDomain + "/.well-known/bluesky-client-metadata.json",
 		ClientName:              appName,
@@ -65,13 +65,13 @@ func (rt *WellKnownRouter) BlueskyClientMetadataHandler(w http.ResponseWriter, r
 		DpopBoundAccessTokens:   true,
 		JWKSURI:                 publicDomain + "/.well-known/jwks.json",
 	}
-	json.NewEncoder(w).Encode(metadata)
+	_ = json.NewEncoder(w).Encode(metadata)
 }
 
 // JWKSHandler serves the public JWKS from keys/jwks.public.json.
 func (rt *WellKnownRouter) JWKSHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	io.WriteString(w, rt.Router.Config.JWKSPublic)
+	_, _ = io.WriteString(w, rt.Config.JWKSPublic)
 }
 
 // RedirectHandler handles OAuth2 redirect with dynamically generated redirect URI.
@@ -111,12 +111,12 @@ func (rt *WellKnownRouter) RedirectHandler(w http.ResponseWriter, r *http.Reques
 	})
 
 	// Use PublicDomain from config for redirect URI
-	publicDomain := rt.Router.Config.PublicDomain
+	publicDomain := rt.Config.PublicDomain
 	redirectURI := publicDomain + "/auth/callback"
 
 	// Get OAuth2 config with correct redirect URI
 	provider := publicDomain // For Bluesky, provider is the PDS base URL
-	cfg := rt.Router.Config
+	cfg := rt.Config
 	conf := auth.OAuth2Config(provider, cfg)
 	conf.RedirectURL = redirectURI
 

@@ -1,0 +1,87 @@
+# Lefthook configuration for dis.quest
+# https://github.com/evilmartians/lefthook
+
+# Skip hooks in CI environment
+skip_output:
+  - meta
+  - execution
+
+pre-commit:
+  parallel: true
+  commands:
+    # Format code
+    format:
+      glob: "*.go"
+      run: goimports -w {staged_files}
+      stage_fixed: true
+
+    # Generate code if templates changed
+    generate-templ:
+      glob: "*.templ"
+      run: templ generate
+      stage_fixed: true
+
+    # Generate SQLC if queries changed
+    generate-sqlc:
+      glob: "internal/db/queries.sql"
+      run: sqlc generate
+      stage_fixed: true
+
+    # Lint code
+    lint:
+      glob: "*.go"
+      run: golangci-lint run --fix
+      stage_fixed: true
+
+    # Check for TODO/FIXME in committed code
+    todos:
+      glob: "*.{go,templ,sql}"
+      run: |
+        if grep -rn "TODO\|FIXME\|XXX\|HACK" {staged_files}; then
+          echo "⚠️  Found TODO/FIXME comments in staged files"
+          echo "Consider addressing them before committing"
+        fi
+      fail_text: "TODO/FIXME comments found"
+
+pre-push:
+  parallel: true
+  commands:
+    # Run tests before pushing
+    test:
+      run: go test ./...
+
+    # Final lint check
+    lint:
+      run: golangci-lint run
+
+    # Verify build works
+    build:
+      run: task build
+
+    # Check for uncommitted generated files
+    generated-check:
+      run: |
+        templ generate
+        sqlc generate
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "❌ Generated files are not up to date"
+          echo "Run 'task generate' and commit the changes"
+          exit 1
+        fi
+
+commit-msg:
+  commands:
+    # Validate simple conventional commit format (no scopes)
+    conventional-commit:
+      run: |
+        commit_regex='^(feat|fix|chore|docs|style|refactor|test|perf|ci|build|revert): .{1,50}'
+        if ! grep -qE "$commit_regex" "$1"; then
+          echo "❌ Commit message does not follow Conventional Commits format"
+          echo "Expected: type: description"
+          echo "Examples:"
+          echo "  feat: add user authentication"
+          echo "  fix: resolve database connection issue"
+          echo "  chore: update dependencies"
+          echo "Valid types: feat, fix, chore, docs, style, refactor, test, perf, ci, build, revert"
+          exit 1
+        fi

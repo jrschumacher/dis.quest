@@ -1,20 +1,12 @@
+version: "2"
+
 run:
   timeout: 5m
   go: "1.23"
 
 linters:
+  default: standard
   enable:
-    # Default linters
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-    
-    # Additional recommended linters
-    - gofmt
-    - goimports
     - gocritic
     - revive
     - gosec
@@ -22,59 +14,4 @@ linters:
     - unparam
     - misspell
     - prealloc
-    - exportloopref
     - nolintlint
-
-linters-settings:
-  gocritic:
-    enabled-tags:
-      - performance
-      - style
-      - experimental
-    disabled-checks:
-      - paramTypeCombine # Often false positives
-  
-  revive:
-    rules:
-      - name: exported
-        disabled: false
-        arguments:
-          - checkPrivateReceivers
-          - sayRepetitiveInsteadOfStutters
-      - name: var-naming
-        disabled: false
-        arguments:
-          - ["ID"] # Allow ID instead of Id
-  
-  gosec:
-    excludes:
-      - G104 # Unhandled errors - handled by errcheck
-  
-  misspell:
-    locale: US
-
-issues:
-  exclude-use-default: false
-  exclude:
-    # Exclude some lints that are covered by other tools or are overly strict
-    - "Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*printf?|os\.(Un)?Setenv). is not checked"
-  
-  exclude-rules:
-    # Allow unused parameters in interface implementations
-    - path: ".*_test.go"
-      linters:
-        - unparam
-        - gosec
-    
-    # Generated files
-    - path: ".*_templ.go"
-      linters:
-        - all
-    - path: ".*_gen.go"
-      linters:
-        - all
-
-output:
-  format: colored-line-number
-  print-issued-lines: true
-  print-linter-name: true

@@ -1,0 +1,18 @@
+{
+  "recommendations": [
+    "golang.go",
+    "a-h.templ",
+    "ms-vscode.vscode-json",
+    "redhat.vscode-yaml",
+    "ms-vscode.makefile-tools",
+    "task.vscode-task",
+    "mtxr.sqltools",
+    "mtxr.sqltools-driver-sqlite",
+    "bradlc.vscode-tailwindcss",
+    "EditorConfig.EditorConfig",
+    "ms-vscode.vscode-eslint"
+  ],
+  "unwantedRecommendations": [
+    "ms-vscode.vscode-typescript-next"
+  ]
+}
