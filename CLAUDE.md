@@ -319,3 +319,11 @@ task issue-list        # Show current work items
 - **Key Test Areas**: Authentication (`internal/auth/`), PDS integration (`internal/pds/`), config validation
 - **CI/CD**: Automated testing via GitHub Actions on push/PR to main branch
 - **Test Isolation**: Tests use Go's standard testing package with table-driven tests where appropriate
+
+## Architectural Decision Records (ADRs)
+
+- ADRs (architectural decision records) are at `/adr`
+
+## Project Documentation
+
+- PRDs (product briefs) are at <root>/docs/prd
