@@ -1,3 +1,4 @@
+// Package main is the entry point for the dis.quest application
 package main
 
 import (

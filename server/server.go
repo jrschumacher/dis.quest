@@ -1,3 +1,4 @@
+// Package server provides HTTP server initialization and configuration
 package server
 
 import (
@@ -5,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jrschumacher/dis.quest/internal/config"
+	"github.com/jrschumacher/dis.quest/internal/db"
 	"github.com/jrschumacher/dis.quest/internal/logger"
 	apphandlers "github.com/jrschumacher/dis.quest/server/app"
 	authhandlers "github.com/jrschumacher/dis.quest/server/auth-handlers"
@@ -25,18 +27,31 @@ const (
 	referrerPolicy        = "strict-origin-when-cross-origin"
 )
 
+// Start initializes and starts the HTTP server with the given configuration
 func Start(cfg *config.Config) {
 	if err := config.Validate(cfg); err != nil {
 		logger.Error("invalid config", "error", err)
 		panic("invalid config")
 	}
 
+	// Initialize database service
+	dbService, err := db.NewService(cfg)
+	if err != nil {
+		logger.Error("failed to initialize database service", "error", err)
+		panic("failed to initialize database service")
+	}
+	defer func() {
+		if err := dbService.Close(); err != nil {
+			logger.Error("failed to close database service", "error", err)
+		}
+	}()
+
 	mux := http.NewServeMux()
 
 	wellknownhandlers.RegisterRoutes(mux, "/.well-known", cfg)
 	authhandlers.RegisterRoutes(mux, "/auth", cfg)
 	healthhandlers.RegisterRoutes(mux, "/health", cfg)
-	apphandlers.RegisterRoutes(mux, "/", cfg)
+	apphandlers.RegisterRoutes(mux, "/", cfg, dbService)
 
 	// Secure headers middleware
 	handler := secureHeaders(mux)

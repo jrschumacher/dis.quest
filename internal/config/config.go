@@ -1,3 +1,4 @@
+// Package config provides application configuration loading and validation
 package config
 
 import (
@@ -12,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Environment constants
 const (
 	EnvProd = "production"
 	EnvDev  = "development"
@@ -83,6 +85,7 @@ func Load() *Config {
 	return &cfg
 }
 
+// Validate validates the configuration using struct tags
 func Validate(cfg *Config) error {
 	validate := validator.New()
 	return validate.Struct(cfg)

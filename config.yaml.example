@@ -11,8 +11,14 @@ port: "3000"
 pds_endpoint: http://localhost:4000
 
 # Database connection string used by the application.
-# Example: postgres://user:pass@localhost:5432/disquest?sslmode=disable
-database_url: postgres://user:pass@localhost:5432/disquest?sslmode=disable
+# The driver is auto-detected from the connection string format.
+
+# SQLite (recommended for development/testing)
+database_url: "./disquest.db"
+
+# PostgreSQL (recommended for production) - uncomment and configure as needed
+# database_url: "postgres://user:pass@localhost:5432/disquest?sslmode=disable"
+# database_url: "postgresql://user:pass@localhost:5432/disquest"
 
 # Private JSON Web Key Set used to sign tokens.
 # Replace with the contents of your private JWKS.

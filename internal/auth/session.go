@@ -14,11 +14,13 @@ import (
 	"net/http"
 )
 
+// CreateSessionRequest represents a session creation request
 type CreateSessionRequest struct {
 	Identifier string `json:"identifier"`
 	Password   string `json:"password"`
 }
 
+// CreateSessionResponse represents a session creation response
 type CreateSessionResponse struct {
 	AccessJwt  string `json:"accessJwt"`
 	RefreshJwt string `json:"refreshJwt"`

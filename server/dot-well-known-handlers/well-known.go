@@ -1,3 +1,4 @@
+// Package dotwellknown handles .well-known endpoints for OAuth2 and JWKS
 package dotwellknown
 
 import (
@@ -15,10 +16,12 @@ const blueskyClientMetadataFilename = "bluesky-client-metadata.json"
 const jwksFilename = "jwks.json"
 const redirectURIPath = "/auth/callback"
 
+// WellKnownRouter handles .well-known HTTP routes
 type WellKnownRouter struct {
 	*svrlib.Router
 }
 
+// BlueskyClientMetadata represents OAuth2 client metadata for Bluesky
 type BlueskyClientMetadata struct {
 	ClientID                string   `json:"client_id"`
 	ClientName              string   `json:"client_name"`
@@ -42,13 +45,15 @@ func RegisterRoutes(mux *http.ServeMux, baseRoute string, cfg *config.Config) {
 	mux.HandleFunc(baseRoute+"/"+jwksFilename, router.JWKSHandler)
 }
 
+// WellKnownHandler serves the base .well-known endpoint
 func (rt *WellKnownRouter) WellKnownHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ok","message":"Well-known endpoint"}`))
 }
 
-func (rt *WellKnownRouter) BlueskyClientMetadataHandler(w http.ResponseWriter, r *http.Request) {
+// BlueskyClientMetadataHandler serves the Bluesky OAuth2 client metadata
+func (rt *WellKnownRouter) BlueskyClientMetadataHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	publicDomain := rt.Config.PublicDomain
 	appName := rt.Config.AppName
@@ -69,7 +74,7 @@ func (rt *WellKnownRouter) BlueskyClientMetadataHandler(w http.ResponseWriter, r
 }
 
 // JWKSHandler serves the public JWKS from keys/jwks.public.json.
-func (rt *WellKnownRouter) JWKSHandler(w http.ResponseWriter, r *http.Request) {
+func (rt *WellKnownRouter) JWKSHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = io.WriteString(w, rt.Config.JWKSPublic)
 }

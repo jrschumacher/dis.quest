@@ -120,6 +120,12 @@ server/
 - **Interactivity**: Server-side rendering with minimal JavaScript
 - **Static Assets**: Served from `assets/` directory
 
+### Middleware Architecture
+- **Chain-Based System**: Clean composition using `middleware.NewChain()`
+- **Predefined Chains**: `PublicChain`, `AuthenticatedChain`, `ProtectedChain`
+- **Helper Functions**: `WithAuth()`, `WithProtection()`, `WithUserContext()`
+- **Custom Chains**: Build specific middleware combinations for different route groups
+
 ### Technology Stack
 - **Database**: SQLC for type-safe SQL queries
 - **HTML Views**: Templ for server-side rendering
@@ -158,14 +164,19 @@ The application defines custom lexicons under `quest.dis.*`:
 ### Database Stack
 - **Query Generation**: SQLC for type-safe Go code generation from SQL
 - **Migrations**: Tern for database schema migrations
-- **Database Engine**: SQLite by default, configurable via `database_url` in config
+- **Database Engines**: 
+  - **SQLite**: Recommended for development/testing (auto-detected from file paths)
+  - **PostgreSQL**: Recommended for production (auto-detected from connection strings)
+- **Driver Detection**: Automatic based on `database_url` format in config
 - **Query Organization**: All SQL queries should be kept in a single query file
 
 ### Database Workflow
 1. Write SQL queries in the central query file
 2. Run `sqlc generate` to generate Go code from SQL
 3. Use Tern for database migrations: `tern migrate`
-4. Database engine is configurable via connection string in config.yaml
+4. Choose database engine by setting `database_url` in config.yaml:
+   - SQLite: `./disquest.db` or `file:path/to/db.sqlite`
+   - PostgreSQL: `postgres://user:pass@host:port/dbname`
 
 ## Development Workflow
 

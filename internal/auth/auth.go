@@ -1,3 +1,4 @@
+// Package auth provides authentication utilities for OAuth2 and session management
 package auth
 
 import (
@@ -11,7 +12,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// PKCE utilities
+// GeneratePKCE generates a PKCE code verifier and challenge for OAuth2 flows
 func GeneratePKCE() (codeVerifier, codeChallenge string, err error) {
 	b := make([]byte, 32)
 	_, err = rand.Read(b)
@@ -25,7 +26,7 @@ func GeneratePKCE() (codeVerifier, codeChallenge string, err error) {
 	return
 }
 
-// OAuth2 config for Bluesky/ATProto (new OAuth2 flow)
+// OAuth2Config creates an OAuth2 configuration for Bluesky/ATProto
 func OAuth2Config(provider string, cfg *config.Config) *oauth2.Config {
 	return &oauth2.Config{
 		ClientID:     cfg.OAuthClientID,
@@ -45,6 +46,7 @@ const (
 	refreshTokenCookieName = "dsq_refresh"
 )
 
+// SetSessionCookieWithEnv sets session cookies with environment-specific security settings
 func SetSessionCookieWithEnv(w http.ResponseWriter, accessToken string, refreshToken []string, isDev bool) {
 	secure := !isDev
 	http.SetCookie(w, &http.Cookie{
@@ -65,12 +67,13 @@ func SetSessionCookieWithEnv(w http.ResponseWriter, accessToken string, refreshT
 	}
 }
 
-// Update SetSessionCookie to call the new function for backward compatibility
+// SetSessionCookie sets session cookies with default production security settings
 func SetSessionCookie(w http.ResponseWriter, accessToken string, refreshToken ...string) {
 	// Default to production (secure) if not using the new function
 	SetSessionCookieWithEnv(w, accessToken, refreshToken, false)
 }
 
+// ClearSessionCookieWithEnv clears session cookies with environment-specific settings
 func ClearSessionCookieWithEnv(w http.ResponseWriter, isDev bool) {
 	secure := !isDev
 	http.SetCookie(w, &http.Cookie{
@@ -91,11 +94,13 @@ func ClearSessionCookieWithEnv(w http.ResponseWriter, isDev bool) {
 	})
 }
 
+// ClearSessionCookie clears session cookies with default production settings
 func ClearSessionCookie(w http.ResponseWriter) {
 	// Default to production (secure) if not using the new function
 	ClearSessionCookieWithEnv(w, false)
 }
 
+// GetSessionCookie retrieves the session cookie value from the request
 func GetSessionCookie(r *http.Request) (string, error) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil {
@@ -104,6 +109,7 @@ func GetSessionCookie(r *http.Request) (string, error) {
 	return cookie.Value, nil
 }
 
+// GetRefreshTokenCookie retrieves the refresh token cookie value from the request
 func GetRefreshTokenCookie(r *http.Request) (string, error) {
 	cookie, err := r.Cookie(refreshTokenCookieName)
 	if err != nil {
@@ -112,7 +118,7 @@ func GetRefreshTokenCookie(r *http.Request) (string, error) {
 	return cookie.Value, nil
 }
 
-// Exchange code for token
+// ExchangeCodeForToken exchanges an authorization code for an access token
 func ExchangeCodeForToken(ctx context.Context, provider, code, codeVerifier string, cfg *config.Config) (*oauth2.Token, error) {
 	conf := OAuth2Config(provider, cfg)
 	return conf.Exchange(ctx, code, oauth2.SetAuthURLParam("code_verifier", codeVerifier))

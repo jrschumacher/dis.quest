@@ -15,6 +15,5 @@ node_modules
 __htmgo
 dist
 
-
-
-
+# Build artifacts
+dis.quest

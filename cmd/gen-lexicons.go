@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -35,7 +36,10 @@ var genLexiconsCmd = &cobra.Command{
 			outPath := filepath.Join(outputDir, file.Name())
 
 			// Validate that the path is within the expected directory
-			if !filepath.HasPrefix(filepath.Clean(inPath), filepath.Clean(lexiconDir)) {
+			cleanInPath := filepath.Clean(inPath)
+			cleanLexiconDir := filepath.Clean(lexiconDir)
+			relPath, err := filepath.Rel(cleanLexiconDir, cleanInPath)
+			if err != nil || strings.HasPrefix(relPath, "..") {
 				fmt.Fprintf(os.Stderr, "Invalid file path: %s\n", inPath)
 				continue
 			}

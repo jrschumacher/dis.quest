@@ -1,3 +1,4 @@
+// Package auth handles HTTP routes for authentication
 package auth
 
 import (
@@ -10,13 +11,14 @@ import (
 	"golang.org/x/oauth2"
 )
 
-type AuthRouter struct {
+// Router handles authentication-related HTTP routes
+type Router struct {
 	*svrlib.Router
 }
 
 // RegisterRoutes registers all /auth/* routes on the given mux, with the prefix handled by the caller.
 func RegisterRoutes(mux *http.ServeMux, prefix string, cfg *config.Config) {
-	router := &AuthRouter{svrlib.NewRouter(mux, prefix, cfg)}
+	router := &Router{svrlib.NewRouter(mux, prefix, cfg)}
 	// Pass config to handlers for env-aware cookie security
 	routerConfig := cfg
 
@@ -29,7 +31,7 @@ func RegisterRoutes(mux *http.ServeMux, prefix string, cfg *config.Config) {
 }
 
 // LoginHandler handles POST /login requests
-func (rt *AuthRouter) LoginHandler(w http.ResponseWriter, r *http.Request) {
+func (rt *Router) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "Method not allowed", "path", r.URL.Path)
 		return
@@ -43,7 +45,7 @@ func (rt *AuthRouter) LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // LoginHandlerWithConfig handles POST /login requests with config for cookie security
-func (rt *AuthRouter) LoginHandlerWithConfig(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
+func (rt *Router) LoginHandlerWithConfig(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "Method not allowed", "path", r.URL.Path)
 		return
@@ -69,19 +71,19 @@ func (rt *AuthRouter) LoginHandlerWithConfig(w http.ResponseWriter, r *http.Requ
 }
 
 // LogoutHandler handles /auth/logout requests
-func (rt *AuthRouter) LogoutHandler(w http.ResponseWriter, r *http.Request) {
+func (rt *Router) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	auth.ClearSessionCookie(w)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // LogoutHandlerWithConfig handles /auth/logout requests with config for cookie security
-func (rt *AuthRouter) LogoutHandlerWithConfig(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
+func (rt *Router) LogoutHandlerWithConfig(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
 	auth.ClearSessionCookieWithEnv(w, cfg.AppEnv == "development")
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // RedirectHandler handles /auth/redirect requests
-func (rt *AuthRouter) RedirectHandler(w http.ResponseWriter, r *http.Request) {
+func (rt *Router) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 	handle := r.URL.Query().Get("handle")
 	if handle == "" {
 		writeError(w, http.StatusBadRequest, "Missing handle", "param", "handle")
@@ -138,7 +140,7 @@ func (rt *AuthRouter) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // CallbackHandler handles /auth/callback requests
-func (rt *AuthRouter) CallbackHandler(w http.ResponseWriter, r *http.Request) {
+func (rt *Router) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	handleCookie, err := r.Cookie("oauth_handle")
 	if err != nil {
@@ -191,8 +193,8 @@ func (rt *AuthRouter) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/discussion", http.StatusSeeOther)
 }
 
-// Serve the OAuth client metadata JSON for Bluesky
-func (rt *AuthRouter) ClientMetadataHandler(w http.ResponseWriter, _ *http.Request) {
+// ClientMetadataHandler serves the OAuth client metadata JSON for Bluesky
+func (rt *Router) ClientMetadataHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{

@@ -7,32 +7,38 @@ on:
     branches: [ main ]
 
 jobs:
-  # Code generation and validation
-  generate:
-    name: Code Generation
+  # Setup job - prepares environment and generates code
+  setup:
+    name: Setup & Code Generation
     runs-on: ubuntu-latest
+    outputs:
+      go-version: ${{ steps.go-version.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
-      
+
+      - name: Extract Go version
+        id: go-version
+        run: echo "version=$(grep '^go ' go.mod | cut -d' ' -f2)" >> $GITHUB_OUTPUT
+
       - name: Install templ
         run: go install github.com/a-h/templ/cmd/templ@latest
-      
+
       - name: Install sqlc
         run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-      
+
       - name: Generate templ files
         run: templ generate
-      
+
       - name: Generate SQLC files
         run: sqlc generate
-      
+
       - name: Verify no uncommitted changes
         run: |
           if [ -n "$(git status --porcelain)" ]; then
@@ -41,35 +47,40 @@ jobs:
             exit 1
           fi
 
+      - name: Cache generated files
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            **/*_templ.go
+            internal/db/queries.sql.go
+          key: generated-files-${{ github.sha }}
+
   # Comprehensive linting
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    needs: generate
+    needs: setup
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ needs.setup.outputs.go-version }}
           cache: true
-      
-      - name: Install templ
-        run: go install github.com/a-h/templ/cmd/templ@latest
-      
-      - name: Install sqlc
-        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-      
-      - name: Generate templ files
-        run: templ generate
-      
-      - name: Generate SQLC files
-        run: sqlc generate
-      
+
+      - name: Restore generated files
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            **/*_templ.go
+            internal/db/queries.sql.go
+          key: generated-files-${{ github.sha }}
+          fail-on-cache-miss: true
+
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v8
         with:
           version: latest
           args: --config=.golangci.yml
@@ -78,35 +89,32 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    needs: generate
+    needs: setup
     strategy:
       matrix:
         go-version: ['1.23', '1.24']
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Set up Go ${{ matrix.go-version }}
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
-      
-      - name: Install templ
-        run: go install github.com/a-h/templ/cmd/templ@latest
-      
-      - name: Install sqlc
-        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-      
-      - name: Generate templ files
-        run: templ generate
-      
-      - name: Generate SQLC files
-        run: sqlc generate
-      
+
+      - name: Restore generated files
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            **/*_templ.go
+            internal/db/queries.sql.go
+          key: generated-files-${{ github.sha }}
+          fail-on-cache-miss: true
+
       - name: Run tests
         run: go test -v -race -coverprofile=coverage.out ./...
-      
+
       - name: Upload coverage to Codecov
         if: matrix.go-version == '1.23'
         uses: codecov/codecov-action@v4
@@ -118,31 +126,46 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [generate, lint, test]
+    needs: setup
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ needs.setup.outputs.go-version }}
           cache: true
-      
-      - name: Install templ
-        run: go install github.com/a-h/templ/cmd/templ@latest
-      
-      - name: Install sqlc
-        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-      
-      - name: Generate templ files
-        run: templ generate
-      
-      - name: Generate SQLC files
-        run: sqlc generate
-      
+
+      - name: Restore generated files
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            **/*_templ.go
+            internal/db/queries.sql.go
+          key: generated-files-${{ github.sha }}
+          fail-on-cache-miss: true
+
       - name: Build application
         run: go build -v -o bin/disquest ./
-      
+
       - name: Verify binary
         run: ./bin/disquest --help
+
+  # Final status job - ensures all parallel jobs completed successfully
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [setup, lint, test, build]
+    if: always()
+    steps:
+      - name: Check all jobs
+        run: |
+          if [[ "${{ needs.setup.result }}" != "success" || \
+                "${{ needs.lint.result }}" != "success" || \
+                "${{ needs.test.result }}" != "success" || \
+                "${{ needs.build.result }}" != "success" ]]; then
+            echo "One or more CI jobs failed"
+            exit 1
+          fi
+          echo "All CI jobs completed successfully!"

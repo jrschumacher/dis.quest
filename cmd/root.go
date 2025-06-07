@@ -1,3 +1,4 @@
+// Package cmd provides CLI commands for the dis.quest application
 package cmd
 
 import (
@@ -16,6 +17,7 @@ var rootCmd = &cobra.Command{
 	Long:  `dis.quest — Go POC for ATProtocol Discussions`,
 }
 
+// Execute runs the root command with the provided configuration
 func Execute(c *config.Config) {
 	cfg = c
 	logger.Info("Starting CLI", "env", cfg.AppEnv)
