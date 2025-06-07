@@ -4,9 +4,9 @@ This plan outlines the architecture and development roadmap for `dis.quest`, a s
 
 ## Current Status Overview
 
-**✅ COMPLETED**: Development tooling, database foundation, authentication infrastructure, basic UI templates  
-**🚧 IN PROGRESS**: ATProtocol integration, lexicon implementation  
-**⏭️ NEXT**: Connect handlers to database, implement core discussion functionality
+**✅ COMPLETED**: Development tooling, database foundation, authentication infrastructure, basic UI templates, database integration & core data layer  
+**🚧 IN PROGRESS**: Core discussion functionality, ATProtocol integration  
+**⏭️ NEXT**: Complete authentication flow, implement core discussion workflows
 
 ---
 
@@ -52,11 +52,11 @@ This plan outlines the architecture and development roadmap for `dis.quest`, a s
 - [x] SQLC queries for all CRUD operations with proper indexing
 - [x] Migration system with Tern
 - [x] Type-safe models with JSON serialization
-- [ ] **CRITICAL**: Connect database queries to HTTP handlers
-- [ ] **CRITICAL**: Implement user session to database mapping
-- [ ] Add database transaction support for complex operations
-- [ ] Add proper error handling and validation
-- [ ] Add data access layer abstraction
+- [x] **CRITICAL**: Connect database queries to HTTP handlers
+- [x] **CRITICAL**: Implement user session to database mapping
+- [x] Add database transaction support for complex operations
+- [x] Add proper error handling and validation
+- [x] Add data access layer abstraction (SQLC provides sufficient abstraction)
 
 ## 🧠 Phase 4: Core Discussion Functionality
 
