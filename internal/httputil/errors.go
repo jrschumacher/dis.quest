@@ -1,3 +1,4 @@
+// Package httputil provides HTTP utility functions for error handling and response management
 package httputil
 
 import (
@@ -12,7 +13,7 @@ import (
 type ErrorResponse struct {
 	Error   string                      `json:"error"`
 	Message string                      `json:"message,omitempty"`
-	Details []validation.ValidationError `json:"details,omitempty"`
+	Details []validation.Error `json:"details,omitempty"`
 }
 
 // WriteError writes a standardized error response
@@ -35,7 +36,7 @@ func WriteError(w http.ResponseWriter, status int, message string, logFields ...
 }
 
 // WriteValidationError writes a validation error response
-func WriteValidationError(w http.ResponseWriter, validationErr validation.ValidationErrors) {
+func WriteValidationError(w http.ResponseWriter, validationErr validation.Errors) {
 	response := ErrorResponse{
 		Error:   "Validation Failed",
 		Message: validationErr.Error(),

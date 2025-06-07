@@ -1,3 +1,4 @@
+// Package logger provides logging utilities with structured logging support
 package logger
 
 // Info logs an info message using the default logger.

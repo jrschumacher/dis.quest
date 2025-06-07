@@ -1,3 +1,4 @@
+// Package testutil provides test database schema and utilities
 package testutil
 
 import (

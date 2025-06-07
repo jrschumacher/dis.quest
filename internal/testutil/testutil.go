@@ -85,7 +85,7 @@ type APITestCase struct {
 // TODO: Implement when needed for more complex test scenarios
 
 // CreateTestUser creates a test user and returns a valid JWT token
-func CreateTestUser(t *testing.T, dbService *db.Service) string {
+func CreateTestUser(t *testing.T, _ *db.Service) string {
 	t.Helper()
 	
 	// This would create a test user and return a valid JWT

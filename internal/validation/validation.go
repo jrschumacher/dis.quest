@@ -1,3 +1,4 @@
+// Package validation provides structured validation error handling
 package validation
 
 import (
@@ -6,21 +7,21 @@ import (
 	"unicode/utf8"
 )
 
-// ValidationError represents a validation error with field-specific details
-type ValidationError struct {
+// Error represents a validation error with field-specific details
+type Error struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
 }
 
-// ValidationErrors represents multiple validation errors
-type ValidationErrors []ValidationError
+// Errors represents multiple validation errors
+type Errors []Error
 
 // Error implements the error interface
-func (ve ValidationErrors) Error() string {
+func (ve Errors) Error() string {
 	if len(ve) == 0 {
 		return "validation failed"
 	}
-	
+
 	var messages []string
 	for _, err := range ve {
 		if err.Field != "" {
@@ -29,24 +30,24 @@ func (ve ValidationErrors) Error() string {
 			messages = append(messages, err.Message)
 		}
 	}
-	
+
 	return strings.Join(messages, "; ")
 }
 
 // Add adds a validation error
-func (ve *ValidationErrors) Add(field, message string) {
-	*ve = append(*ve, ValidationError{Field: field, Message: message})
+func (ve *Errors) Add(field, message string) {
+	*ve = append(*ve, Error{Field: field, Message: message})
 }
 
 // HasErrors returns true if there are validation errors
-func (ve ValidationErrors) HasErrors() bool {
+func (ve Errors) HasErrors() bool {
 	return len(ve) > 0
 }
 
 // ValidateRequired checks if a value is not empty
-func ValidateRequired(value string, fieldName string) *ValidationError {
+func ValidateRequired(value string, fieldName string) *Error {
 	if strings.TrimSpace(value) == "" {
-		return &ValidationError{
+		return &Error{
 			Field:   fieldName,
 			Message: "is required",
 		}
@@ -55,9 +56,9 @@ func ValidateRequired(value string, fieldName string) *ValidationError {
 }
 
 // ValidateMaxLength checks if a string doesn't exceed the maximum length
-func ValidateMaxLength(value string, maxLength int, fieldName string) *ValidationError {
+func ValidateMaxLength(value string, maxLength int, fieldName string) *Error {
 	if utf8.RuneCountInString(value) > maxLength {
-		return &ValidationError{
+		return &Error{
 			Field:   fieldName,
 			Message: fmt.Sprintf("must not exceed %d characters", maxLength),
 		}
@@ -66,9 +67,9 @@ func ValidateMaxLength(value string, maxLength int, fieldName string) *Validatio
 }
 
 // ValidateMinLength checks if a string meets the minimum length
-func ValidateMinLength(value string, minLength int, fieldName string) *ValidationError {
+func ValidateMinLength(value string, minLength int, fieldName string) *Error {
 	if utf8.RuneCountInString(strings.TrimSpace(value)) < minLength {
-		return &ValidationError{
+		return &Error{
 			Field:   fieldName,
 			Message: fmt.Sprintf("must be at least %d characters", minLength),
 		}
@@ -77,49 +78,49 @@ func ValidateMinLength(value string, minLength int, fieldName string) *Validatio
 }
 
 // ValidateDID checks if a string looks like a valid DID
-func ValidateDID(value string, fieldName string) *ValidationError {
+func ValidateDID(value string, fieldName string) *Error {
 	if !strings.HasPrefix(value, "did:") {
-		return &ValidationError{
+		return &Error{
 			Field:   fieldName,
 			Message: "must be a valid DID",
 		}
 	}
-	
+
 	parts := strings.Split(value, ":")
 	if len(parts) < 3 {
-		return &ValidationError{
+		return &Error{
 			Field:   fieldName,
 			Message: "must be a valid DID format",
 		}
 	}
-	
+
 	return nil
 }
 
 // ValidateRkey checks if a string is a valid record key
-func ValidateRkey(value string, fieldName string) *ValidationError {
+func ValidateRkey(value string, fieldName string) *Error {
 	if strings.TrimSpace(value) == "" {
-		return &ValidationError{
+		return &Error{
 			Field:   fieldName,
 			Message: "is required",
 		}
 	}
-	
+
 	// Basic rkey validation - no spaces, reasonable length
 	if strings.Contains(value, " ") {
-		return &ValidationError{
+		return &Error{
 			Field:   fieldName,
 			Message: "cannot contain spaces",
 		}
 	}
-	
+
 	if len(value) > 100 {
-		return &ValidationError{
+		return &Error{
 			Field:   fieldName,
 			Message: "must not exceed 100 characters",
 		}
 	}
-	
+
 	return nil
 }
 
@@ -132,8 +133,8 @@ type TopicValidation struct {
 
 // Validate validates topic fields
 func (tv *TopicValidation) Validate() error {
-	var errors ValidationErrors
-	
+	var errors Errors
+
 	// Validate subject
 	if err := ValidateRequired(tv.Subject, "subject"); err != nil {
 		errors.Add(err.Field, err.Message)
@@ -145,7 +146,7 @@ func (tv *TopicValidation) Validate() error {
 			errors.Add(err.Field, err.Message)
 		}
 	}
-	
+
 	// Validate initial message
 	if err := ValidateRequired(tv.InitialMessage, "initial_message"); err != nil {
 		errors.Add(err.Field, err.Message)
@@ -157,18 +158,18 @@ func (tv *TopicValidation) Validate() error {
 			errors.Add(err.Field, err.Message)
 		}
 	}
-	
+
 	// Validate category (optional)
 	if tv.Category != "" {
 		if err := ValidateMaxLength(tv.Category, 50, "category"); err != nil {
 			errors.Add(err.Field, err.Message)
 		}
 	}
-	
+
 	if errors.HasErrors() {
 		return errors
 	}
-	
+
 	return nil
 }
 
@@ -180,8 +181,8 @@ type MessageValidation struct {
 
 // Validate validates message fields
 func (mv *MessageValidation) Validate() error {
-	var errors ValidationErrors
-	
+	var errors Errors
+
 	// Validate content
 	if err := ValidateRequired(mv.Content, "content"); err != nil {
 		errors.Add(err.Field, err.Message)
@@ -193,17 +194,17 @@ func (mv *MessageValidation) Validate() error {
 			errors.Add(err.Field, err.Message)
 		}
 	}
-	
+
 	// Validate parent message rkey (optional)
 	if mv.ParentMessageRkey != "" {
 		if err := ValidateRkey(mv.ParentMessageRkey, "parent_message_rkey"); err != nil {
 			errors.Add(err.Field, err.Message)
 		}
 	}
-	
+
 	if errors.HasErrors() {
 		return errors
 	}
-	
+
 	return nil
 }

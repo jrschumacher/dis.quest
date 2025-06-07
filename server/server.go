@@ -1,3 +1,4 @@
+// Package server provides HTTP server initialization and configuration
 package server
 
 import (
@@ -26,6 +27,7 @@ const (
 	referrerPolicy        = "strict-origin-when-cross-origin"
 )
 
+// Start initializes and starts the HTTP server with the given configuration
 func Start(cfg *config.Config) {
 	if err := config.Validate(cfg); err != nil {
 		logger.Error("invalid config", "error", err)

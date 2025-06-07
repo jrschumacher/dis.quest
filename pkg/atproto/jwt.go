@@ -1,3 +1,4 @@
+// Package atproto provides utilities for working with ATProtocol JWT tokens
 package atproto
 
 import (
@@ -20,7 +21,7 @@ type JWTClaims struct {
 }
 
 // ParseAndValidateJWT parses and validates a JWT token using the jwx library
-func ParseAndValidateJWT(ctx context.Context, tokenString string, keySet jwk.Set) (*JWTClaims, error) {
+func ParseAndValidateJWT(_ context.Context, tokenString string, keySet jwk.Set) (*JWTClaims, error) {
 	// Parse and verify the JWT with the provided key set
 	token, err := jwt.Parse([]byte(tokenString), jwt.WithKeySet(keySet))
 	if err != nil {

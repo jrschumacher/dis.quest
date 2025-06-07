@@ -1,3 +1,4 @@
+// Package db provides database driver abstraction and connection management
 package db
 
 import (
@@ -17,6 +18,7 @@ import (
 // DatabaseDriver represents the type of database driver
 type DatabaseDriver string
 
+// Database driver constants
 const (
 	SQLite     DatabaseDriver = "sqlite3"
 	PostgreSQL DatabaseDriver = "postgres"
@@ -100,13 +102,13 @@ func OpenDatabase(cfg *config.Config) (*sql.DB, DatabaseDriver, error) {
 	
 	// Test the connection
 	if err := db.Ping(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, dbConfig.Driver, fmt.Errorf("failed to ping database: %w", err)
 	}
 	
 	// Apply driver-specific initialization
 	if err := initializeDatabase(db, dbConfig.Driver); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, dbConfig.Driver, fmt.Errorf("failed to initialize database: %w", err)
 	}
 	

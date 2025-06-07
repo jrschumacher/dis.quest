@@ -27,6 +27,7 @@ func NewMockService() *MockService {
 	return &MockService{posts: make(map[string]*Post)}
 }
 
+// CreatePost creates a new post with the given content
 func (m *MockService) CreatePost(content string) (*Post, error) {
 	id := fmt.Sprintf("mock-%d", len(m.posts)+1)
 	post := &Post{ID: id, Content: content}
@@ -34,6 +35,7 @@ func (m *MockService) CreatePost(content string) (*Post, error) {
 	return post, nil
 }
 
+// GetPost retrieves a post by its ID
 func (m *MockService) GetPost(id string) (*Post, error) {
 	post, ok := m.posts[id]
 	if !ok {
@@ -42,6 +44,7 @@ func (m *MockService) GetPost(id string) (*Post, error) {
 	return post, nil
 }
 
+// SetSelectedAnswer sets the selected answer for a post
 func (m *MockService) SetSelectedAnswer(postID, answerID string) error {
 	post, ok := m.posts[postID]
 	if !ok {

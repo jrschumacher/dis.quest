@@ -1,3 +1,4 @@
+// Package app provides the main application HTTP handlers
 package app
 
 import (
@@ -19,13 +20,15 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/validation"
 )
 
-type AppRouter struct {
+// Router handles application-specific HTTP routes
+type Router struct {
 	*svrlib.Router
 	dbService *db.Service
 }
 
-func RegisterRoutes(mux *http.ServeMux, _ string, cfg *config.Config, dbService *db.Service) *AppRouter {
-	router := &AppRouter{
+// RegisterRoutes registers all application routes and returns a Router
+func RegisterRoutes(mux *http.ServeMux, _ string, cfg *config.Config, dbService *db.Service) *Router {
+	router := &Router{
 		Router:    svrlib.NewRouter(mux, "/", cfg),
 		dbService: dbService,
 	}
@@ -56,7 +59,7 @@ func RegisterRoutes(mux *http.ServeMux, _ string, cfg *config.Config, dbService 
 }
 
 // DiscussionHandler shows the discussion page with real data
-func (r *AppRouter) DiscussionHandler(w http.ResponseWriter, req *http.Request) {
+func (r *Router) DiscussionHandler(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	
 	// Get topics from database
@@ -80,7 +83,7 @@ func (r *AppRouter) DiscussionHandler(w http.ResponseWriter, req *http.Request) 
 }
 
 // TopicsHandler shows the topics listing page
-func (r *AppRouter) TopicsHandler(w http.ResponseWriter, req *http.Request) {
+func (r *Router) TopicsHandler(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	
 	// Get topics from database
@@ -102,7 +105,7 @@ func (r *AppRouter) TopicsHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 // TopicsAPIHandler handles REST API operations for topics
-func (r *AppRouter) TopicsAPIHandler(w http.ResponseWriter, req *http.Request) {
+func (r *Router) TopicsAPIHandler(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case http.MethodGet:
 		r.listTopicsAPI(w, req)
@@ -113,7 +116,7 @@ func (r *AppRouter) TopicsAPIHandler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (r *AppRouter) listTopicsAPI(w http.ResponseWriter, req *http.Request) {
+func (r *Router) listTopicsAPI(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	
 	// Parse pagination parameters
@@ -150,7 +153,7 @@ func (r *AppRouter) listTopicsAPI(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (r *AppRouter) createTopicAPI(w http.ResponseWriter, req *http.Request) {
+func (r *Router) createTopicAPI(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	
 	// Get user context
@@ -180,7 +183,7 @@ func (r *AppRouter) createTopicAPI(w http.ResponseWriter, req *http.Request) {
 	}
 	
 	if err := validator.Validate(); err != nil {
-		if validationErrors, ok := err.(validation.ValidationErrors); ok {
+		if validationErrors, ok := err.(validation.Errors); ok {
 			httputil.WriteValidationError(w, validationErrors)
 		} else {
 			httputil.WriteError(w, http.StatusBadRequest, err.Error())
@@ -211,7 +214,7 @@ func (r *AppRouter) createTopicAPI(w http.ResponseWriter, req *http.Request) {
 }
 
 // MessagesAPIHandler handles REST API operations for messages within a topic
-func (r *AppRouter) MessagesAPIHandler(w http.ResponseWriter, req *http.Request) {
+func (r *Router) MessagesAPIHandler(w http.ResponseWriter, req *http.Request) {
 	// Extract topic ID from URL path
 	// Note: In Go 1.22+, we can use path parameters directly
 	topicID := req.URL.Path[len("/api/topics/"):]
@@ -229,7 +232,7 @@ func (r *AppRouter) MessagesAPIHandler(w http.ResponseWriter, req *http.Request)
 	}
 }
 
-func (r *AppRouter) listMessagesAPI(w http.ResponseWriter, req *http.Request, topicID string) {
+func (r *Router) listMessagesAPI(w http.ResponseWriter, req *http.Request, topicID string) {
 	ctx := req.Context()
 	
 	// For now, assume topicID format is "did:rkey"
@@ -256,7 +259,7 @@ func (r *AppRouter) listMessagesAPI(w http.ResponseWriter, req *http.Request, to
 	}
 }
 
-func (r *AppRouter) createMessageAPI(w http.ResponseWriter, req *http.Request, topicID string) {
+func (r *Router) createMessageAPI(w http.ResponseWriter, req *http.Request, topicID string) {
 	ctx := req.Context()
 	
 	// Get user context
@@ -284,7 +287,7 @@ func (r *AppRouter) createMessageAPI(w http.ResponseWriter, req *http.Request, t
 	}
 	
 	if err := validator.Validate(); err != nil {
-		if validationErrors, ok := err.(validation.ValidationErrors); ok {
+		if validationErrors, ok := err.(validation.Errors); ok {
 			httputil.WriteValidationError(w, validationErrors)
 		} else {
 			httputil.WriteError(w, http.StatusBadRequest, err.Error())

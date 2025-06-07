@@ -8,6 +8,7 @@ import (
 
 var defaultLogger *slog.Logger
 
+// Init initializes the default logger with the specified level
 func Init(level string) {
 	var slogLevel slog.Level
 	switch strings.ToUpper(level) {

@@ -10,18 +10,18 @@ import (
 )
 
 // RegisterTestRoutes registers routes with test middleware for testing
-func RegisterTestRoutes(mux *http.ServeMux, prefix string, cfg *config.Config, dbService *db.Service, testUserDID string) *AppRouter {
-	router := &AppRouter{
+func RegisterTestRoutes(mux *http.ServeMux, _ string, _ *config.Config, dbService *db.Service, testUserDID string) *Router {
+	router := &Router{
 		Router:    nil, // We don't need the full router for tests
 		dbService: dbService,
 	}
 
 	// Public routes (same as production)
-	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("test home"))
+	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("test home"))
 	}))
-	mux.Handle("/login", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("test login"))
+	mux.Handle("/login", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("test login"))
 	}))
 	
 	// Protected routes with test middleware
