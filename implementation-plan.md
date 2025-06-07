@@ -19,8 +19,8 @@ This plan outlines the architecture and development roadmap for `dis.quest`, a s
 - [x] Add git hooks with Lefthook for automated quality checks
 - [x] Add database architecture with SQLC type-safe queries
 - [x] Add template system with Templ for server-side rendering
-- [ ] Add local testing support for PDS stubs or mocks
-- [ ] Add integration tests for authentication flow
+- [x] Add local testing support for PDS stubs or mocks
+- [x] Add integration tests for authentication flow
 
 ## 🎨 Phase 1: UI/UX Foundation
 
