@@ -12,6 +12,7 @@ jobs:
     name: Validate PR Title
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: write
       statuses: write
     steps:
@@ -61,10 +62,10 @@ jobs:
             The subject "{subject}" found in the pull request title "{title}"
             didn't match the configured pattern. Please ensure that the subject
             doesn't start with an uppercase character.
-          # For work-in-progress PRs you can typically use draft pull requests 
-          # from GitHub. However, private repositories on the free plan don't have 
-          # this feature and therefore this action allows you to opt-in to using the 
-          # special "[WIP]" prefix to indicate this state. This will avoid the 
+          # For work-in-progress PRs you can typically use draft pull requests
+          # from GitHub. However, private repositories on the free plan don't have
+          # this feature and therefore this action allows you to opt-in to using the
+          # special "[WIP]" prefix to indicate this state. This will avoid the
           # validation of the PR title and the pull request checks will remain pending.
           # Note that a second check will be reported if this is enabled.
           wip: true
