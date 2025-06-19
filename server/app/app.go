@@ -139,8 +139,18 @@ func (r *Router) listTopicsAPI(w http.ResponseWriter, req *http.Request) {
 	}
 	
 	topics, err := r.dbService.Queries().ListTopics(ctx, db.ListTopicsParams{
-		Limit:  int32(limit),
-		Offset: int32(offset),
+		Limit:  func() int32 {
+			if limit < 0 || limit > 2147483647 {
+				return 2147483647
+			}
+			return int32(limit) // #nosec G115
+		}(),
+		Offset: func() int32 {
+			if offset < 0 || offset > 2147483647 {
+				return 0
+			}
+			return int32(offset) // #nosec G115
+		}(),
 	})
 	if err != nil {
 		logger.Error("Failed to fetch topics", "error", err)

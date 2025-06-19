@@ -31,7 +31,7 @@ func (t *PKCETransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			// Read the existing body
 			body, err := io.ReadAll(req.Body)
 			if err == nil {
-				req.Body.Close()
+				_ = req.Body.Close()
 				
 				// Parse form values
 				values, err := url.ParseQuery(string(body))
@@ -71,7 +71,10 @@ func (t *DPoPPKCETransport) RoundTrip(req *http.Request) (*http.Response, error)
 		if err != nil {
 			return nil, err
 		}
-		req.Body.Close()
+		if err := req.Body.Close(); err != nil {
+			// Ignore close error, common in HTTP clients
+			_ = err
+		}
 	}
 	
 	// Helper to create request with DPoP and PKCE
@@ -127,7 +130,10 @@ func (t *DPoPPKCETransport) RoundTrip(req *http.Request) (*http.Response, error)
 	if resp.StatusCode == 400 {
 		// Read response to check for nonce requirement
 		respBody, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			// Ignore close error, common in HTTP clients
+			_ = err
+		}
 		if err == nil && strings.Contains(string(respBody), "use_dpop_nonce") {
 			// Extract nonce from DPoP-Nonce header
 			if nonce := resp.Header.Get("DPoP-Nonce"); nonce != "" {

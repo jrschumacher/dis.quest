@@ -342,3 +342,7 @@ task issue-list        # Show current work items
 ## Project Documentation
 
 - PRDs (product briefs) are at <root>/docs/prd
+
+## Memories and Guidance
+
+- Always handle go errors. We should always log the error unless its a typical error that will become a hotpoint which will impact the performace of the server. Additionally, when creating errors in Go its preferrable to define them as named vars (e.g. `ErrSomethingHappened`) so that calling libraries and systems and tests can evaluate them rather than comparing the contents of the error string.
