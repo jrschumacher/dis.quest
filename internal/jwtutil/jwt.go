@@ -1,16 +1,25 @@
-// Package atproto provides utilities for working with ATProtocol JWT tokens
-package atproto
+// Package jwtutil provides utilities for working with JWT tokens in dis.quest
+package jwtutil
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
-// JWTClaims represents the claims we care about from an ATProto JWT token
+var (
+	// ErrMissingSubject is returned when the JWT is missing a subject (DID)
+	ErrMissingSubject = fmt.Errorf("missing subject (DID) in token")
+	// ErrMissingIssuer is returned when the JWT is missing an issuer
+	ErrMissingIssuer = fmt.Errorf("missing issuer in token")
+	// ErrInvalidToken is returned when the JWT is in an invalid format
+	ErrInvalidToken = fmt.Errorf("invalid token format")
+)
+
+// JWTClaims represents the claims we care about from a JWT token
+// (adapted from ATProto, but not limited to it)
 type JWTClaims struct {
 	Iss   string `json:"iss"`   // Issuer (PDS)
 	Sub   string `json:"sub"`   // Subject (DID)
@@ -94,45 +103,45 @@ func ExtractDIDFromJWT(tokenString string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	if claims.Sub == "" {
-		return "", errors.New("missing subject (DID) in token")
+		return "", fmt.Errorf("missing subject (DID)")
 	}
-	
+
 	return claims.Sub, nil
 }
 
 // GetJWKSFromIssuer fetches the JWKS from an issuer's well-known endpoint
 func GetJWKSFromIssuer(ctx context.Context, issuer string) (jwk.Set, error) {
 	jwksURL := fmt.Sprintf("%s/.well-known/jwks.json", issuer)
-	
+
 	// Fetch the JWKS
 	set, err := jwk.Fetch(ctx, jwksURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch JWKS from %s: %w", jwksURL, err)
 	}
-	
+
 	return set, nil
 }
 
-// VerifyJWT verifies an ATProto JWT token by fetching JWKS from the issuer
+// VerifyJWT verifies a JWT token by fetching JWKS from the issuer
 func VerifyJWT(ctx context.Context, tokenString string) (*JWTClaims, error) {
 	// First, parse without verification to get the issuer
 	unverifiedClaims, err := ParseJWTWithoutVerification(tokenString)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if unverifiedClaims.Iss == "" {
-		return nil, errors.New("missing issuer in token")
+		return nil, fmt.Errorf("missing issuer")
 	}
-	
+
 	// Fetch JWKS from the issuer
 	keySet, err := GetJWKSFromIssuer(ctx, unverifiedClaims.Iss)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Now parse and verify with the proper keys
 	return ParseAndValidateJWT(ctx, tokenString, keySet)
 }

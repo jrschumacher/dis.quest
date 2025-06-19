@@ -75,6 +75,7 @@ func (r *Router) DiscussionHandler(w http.ResponseWriter, req *http.Request) {
 	
 	// Render discussion component with real data
 	// TODO: Pass topics data to component once we update the component interface
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	component := components.Discussion()
 	if err := component.Render(ctx, w); err != nil {
 		logger.Error("Failed to render discussion page", "error", err)
@@ -138,8 +139,18 @@ func (r *Router) listTopicsAPI(w http.ResponseWriter, req *http.Request) {
 	}
 	
 	topics, err := r.dbService.Queries().ListTopics(ctx, db.ListTopicsParams{
-		Limit:  limit,
-		Offset: offset,
+		Limit:  func() int32 {
+			if limit < 0 || limit > 2147483647 {
+				return 2147483647
+			}
+			return int32(limit) // #nosec G115
+		}(),
+		Offset: func() int32 {
+			if offset < 0 || offset > 2147483647 {
+				return 0
+			}
+			return int32(offset) // #nosec G115
+		}(),
 	})
 	if err != nil {
 		logger.Error("Failed to fetch topics", "error", err)

@@ -11,14 +11,13 @@ port: "3000"
 pds_endpoint: http://localhost:4000
 
 # Database connection string used by the application.
-# The driver is auto-detected from the connection string format.
+# PostgreSQL is the only supported database engine.
 
-# SQLite (recommended for development/testing)
-database_url: "./disquest.db"
+# PostgreSQL (for local development with Docker Compose)
+database_url: "postgres://disquest:disquest@localhost:5432/disquest?sslmode=disable"
 
-# PostgreSQL (recommended for production) - uncomment and configure as needed
-# database_url: "postgres://user:pass@localhost:5432/disquest?sslmode=disable"
-# database_url: "postgresql://user:pass@localhost:5432/disquest"
+# For production, use your hosted PostgreSQL URL (e.g., Neon, AWS RDS, etc.)
+# database_url: "postgres://user:pass@host:port/dbname?sslmode=require"
 
 # Private JSON Web Key Set used to sign tokens.
 # Replace with the contents of your private JWKS.
@@ -39,15 +38,18 @@ jwks_public: |
   }
 
 # Publicly reachable domain for this app (scheme + host).
+# For development, use your ngrok URL (e.g., https://abc123.ngrok.app)
 public_domain: http://localhost:3000
 
 # Human friendly name displayed in OAuth metadata and UI.
 app_name: dis.quest
 
 # OAuth client identifier served at /auth/client-metadata.json
+# For development, use your ngrok URL (e.g., https://abc123.ngrok.app/auth/client-metadata.json)
 oauth_client_id: https://dis.quest/auth/client-metadata.json
 
 # Redirect URL for OAuth callbacks
+# For development, use your ngrok URL (e.g., https://abc123.ngrok.app/auth/callback)
 oauth_redirect_url: https://dis.quest/auth/callback
 
 # Logging verbosity. One of: DEBUG, INFO, WARN, ERROR.

@@ -2,6 +2,7 @@
 package auth
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/jrschumacher/dis.quest/internal/auth"
@@ -89,9 +90,9 @@ func (rt *Router) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Missing handle", "param", "handle")
 		return
 	}
-	provider, err := auth.DiscoverPDS(handle)
+	metadata, err := auth.DiscoverAuthorizationServer(handle)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to discover PDS", "handle", handle, "error", err)
+		writeError(w, http.StatusInternalServerError, "Failed to discover authorization server", "handle", handle, "error", err)
 		return
 	}
 	codeVerifier, codeChallenge, err := auth.GeneratePKCE()
@@ -131,7 +132,7 @@ func (rt *Router) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   true,
 	})
-	conf := auth.OAuth2Config(provider, cfg)
+	conf := auth.OAuth2Config(metadata, cfg)
 	url := conf.AuthCodeURL(state,
 		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
 		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
@@ -148,9 +149,9 @@ func (rt *Router) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	handle := handleCookie.Value
-	provider, err := auth.DiscoverPDS(handle)
+	metadata, err := auth.DiscoverAuthorizationServer(handle)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to rediscover PDS", "handle", handle, "error", err)
+		writeError(w, http.StatusInternalServerError, "Failed to rediscover authorization server", "handle", handle, "error", err)
 		return
 	}
 	code := r.URL.Query().Get("code")
@@ -176,14 +177,15 @@ func (rt *Router) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Missing DPoP key", "handle", handle)
 		return
 	}
-	_ = dpopKey // TODO: Use for DPoP JWT in token exchange
 	cfg := rt.Config
-	// token, err := auth.ExchangeCodeForTokenWithDPoP(ctx, provider, code, verCookie.Value, dpopKey)
-	token, err := auth.ExchangeCodeForToken(ctx, provider, code, verCookie.Value, cfg)
+	logger.Info("Starting token exchange with DPoP", "handle", handle, "code", code[:10]+"...", "tokenEndpoint", metadata.TokenEndpoint)
+	token, err := auth.ExchangeCodeForTokenWithDPoP(ctx, metadata, code, verCookie.Value, dpopKey, cfg)
 	if err != nil {
+		logger.Error("Token exchange failed", "handle", handle, "error", err, "tokenEndpoint", metadata.TokenEndpoint)
 		writeError(w, http.StatusUnauthorized, "Token exchange failed", "handle", handle, "error", err)
 		return
 	}
+	logger.Info("Token exchange successful", "handle", handle)
 	refreshToken := ""
 	if token.RefreshToken != "" {
 		refreshToken = token.RefreshToken
@@ -195,20 +197,25 @@ func (rt *Router) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 // ClientMetadataHandler serves the OAuth client metadata JSON for Bluesky
 func (rt *Router) ClientMetadataHandler(w http.ResponseWriter, _ *http.Request) {
+	cfg := rt.Config
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{
-	  "client_id": "https://dis.quest/auth/client-metadata.json",
-	  "client_name": "dis.quest",
-	  "client_uri": "https://dis.quest",
+	
+	// Use config values for dynamic metadata
+	metadata := fmt.Sprintf(`{
+	  "client_id": "%s",
+	  "client_name": "%s", 
+	  "client_uri": "%s",
 	  "application_type": "web",
 	  "dpop_bound_access_tokens": true,
 	  "grant_types": ["authorization_code", "refresh_token"],
 	  "scope": "atproto transition:generic",
-	  "response_types": ["code"],
-	  "redirect_uris": ["https://dis.quest/auth/callback"],
+	  "response_types": ["code"],  
+	  "redirect_uris": ["%s"],
 	  "token_endpoint_auth_method": "none"
-	}`))
+	}`, cfg.OAuthClientID, cfg.AppName, cfg.PublicDomain, cfg.OAuthRedirectURL)
+	
+	_, _ = w.Write([]byte(metadata))
 }
 
 // writeError is a helper to write an error response and log it

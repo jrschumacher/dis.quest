@@ -64,6 +64,11 @@ OpenTDF integration is optional and scoped under the `quest.dis.sec.*` lexicons.
 
 ## Getting Started
 
+### Prerequisites
+- [Go 1.23+](https://golang.org/dl/)
+- [Docker & Docker Compose](https://docs.docker.com/get-docker/)
+- [ngrok](https://ngrok.com/download) (for OAuth development)
+
 ### First-Time Setup
 ```bash
 # Complete development environment setup
@@ -72,24 +77,29 @@ task dev-setup
 
 ### Development Workflow
 ```bash
-# Start new feature from GitHub issue
-task worktree-dev ISSUE=123
+# 1. Start PostgreSQL database
+docker-compose up -d postgres
 
-# Daily development cycle
-task dev-check                 # Generate code + lint + test
-task commit-check              # Validate before committing
-task pr-create                 # Submit pull request
+# 2. Run database migrations
+task db-migrate
 
-# After PR merge
-task worktree-cleanup BRANCH=issue-123
+# 3. Start ngrok tunnel (in separate terminal)
+ngrok http 3000
+
+# 4. Update config.yaml with your ngrok URL
+# Set oauth_client_id, oauth_redirect_url, and public_domain
+
+# 5. Start development server with hot reload
+task dev
 ```
 
-### Running the Application
+### Daily Development
 ```bash
-# Start the server (multiple options)
-task run                       # Using Taskfile (recommended)
-go run main.go                 # Direct Go execution
-make run                       # Using Makefile
+# Quality check before committing
+task dev-check                 # Generate code + lint + test
+
+# Create pull request
+task pr-create                 # Submit for review
 ```
 
 ### Getting Help
@@ -121,6 +131,9 @@ task help-claude              # Show Claude Code assistance commands
 - Use `task` commands instead of manual git/tool operations
 - Run `task dev-check` before committing
 - Keep `CLAUDE.md` as the authoritative development guide
-- Use GitHub issues and worktrees for feature development
+- Use GitHub issues for tracking work
 
-See `CLAUDE.md` for complete development workflow documentation.
+### Documentation
+- `README.md` - Project overview and getting started
+- `CLAUDE.md` - Complete development workflow for AI assistants
+- `HUMAN.md` - Claude Code prompting techniques for humans

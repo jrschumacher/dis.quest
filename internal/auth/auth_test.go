@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"errors"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 )
@@ -85,5 +87,40 @@ func TestSessionCookieRoundTrip(t *testing.T) {
 	}
 	if refresh != "refresh" {
 		t.Fatalf("expected refresh token, got %s", refresh)
+	}
+}
+
+func TestGetSessionCookie_NotFound(t *testing.T) {
+	// Test when no session cookie is present
+	req := httptest.NewRequest("GET", "/", nil)
+	_, err := GetSessionCookie(req)
+	if err == nil {
+		t.Fatal("expected error when no session cookie present")
+	}
+	if !errors.Is(err, http.ErrNoCookie) {
+		t.Errorf("expected http.ErrNoCookie, got %v", err)
+	}
+}
+
+func TestGetRefreshTokenCookie_NotFound(t *testing.T) {
+	// Test when no refresh token cookie is present
+	req := httptest.NewRequest("GET", "/", nil)
+	_, err := GetRefreshTokenCookie(req)
+	if err == nil {
+		t.Fatal("expected error when no refresh token cookie present")
+	}
+	if !errors.Is(err, http.ErrNoCookie) {
+		t.Errorf("expected http.ErrNoCookie, got %v", err)
+	}
+}
+
+func TestDecodeDPoPPrivateKeyFromPEM_InvalidPEM(t *testing.T) {
+	// Test with invalid PEM data
+	_, err := DecodeDPoPPrivateKeyFromPEM("not-a-pem-block")
+	if err == nil {
+		t.Fatal("expected error with invalid PEM data")
+	}
+	if !errors.Is(err, ErrInvalidPEMBlock) {
+		t.Errorf("expected ErrInvalidPEMBlock, got %v", err)
 	}
 }

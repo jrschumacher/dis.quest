@@ -17,3 +17,6 @@ dist
 
 # Build artifacts
 dis.quest
+disquest.db
+disquest.db-shm
+disquest.db-wal

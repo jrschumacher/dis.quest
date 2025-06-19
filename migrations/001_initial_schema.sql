@@ -8,8 +8,8 @@ CREATE TABLE quest_dis_topic (
     subject TEXT NOT NULL,
     initial_message TEXT NOT NULL,
     category TEXT,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     selected_answer TEXT, -- For Q&A topics
     PRIMARY KEY (did, rkey)
 );
@@ -22,8 +22,8 @@ CREATE TABLE quest_dis_message (
     topic_rkey TEXT NOT NULL,
     parent_message_rkey TEXT, -- NULL for top-level messages
     content TEXT NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (did, rkey),
     FOREIGN KEY (topic_did, topic_rkey) REFERENCES quest_dis_topic(did, rkey) ON DELETE CASCADE
 );
@@ -34,8 +34,8 @@ CREATE TABLE quest_dis_participation (
     topic_did TEXT NOT NULL,
     topic_rkey TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'following', -- following, muted, etc.
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (did, topic_did, topic_rkey),
     FOREIGN KEY (topic_did, topic_rkey) REFERENCES quest_dis_topic(did, rkey) ON DELETE CASCADE
 );
