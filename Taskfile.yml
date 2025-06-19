@@ -63,10 +63,69 @@ tasks:
 
   # Install required tools
   install-tools:
-    desc: Install required development tools
+    desc: Install required development tools (using pre-compiled binaries for speed)
     cmds:
-      - go install github.com/a-h/templ/cmd/templ@latest
-      - go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+      - |
+        if ! command -v templ &> /dev/null; then
+          echo "Installing templ (latest)..."
+          # Get latest version
+          TEMPL_VERSION=$(curl -s https://api.github.com/repos/a-h/templ/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          echo "Resolved templ version: $TEMPL_VERSION"
+          
+          if [[ "$OSTYPE" == "darwin"* ]]; then
+            ARCH=$(uname -m)
+            if [[ "$ARCH" == "arm64" ]]; then
+              curl -L "https://github.com/a-h/templ/releases/download/$TEMPL_VERSION/templ_Darwin_arm64.tar.gz" | tar -xz -C /tmp
+            else
+              curl -L "https://github.com/a-h/templ/releases/download/$TEMPL_VERSION/templ_Darwin_x86_64.tar.gz" | tar -xz -C /tmp
+            fi
+          elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            ARCH=$(uname -m)
+            if [[ "$ARCH" == "x86_64" ]]; then
+              curl -L "https://github.com/a-h/templ/releases/download/$TEMPL_VERSION/templ_Linux_x86_64.tar.gz" | tar -xz -C /tmp
+            elif [[ "$ARCH" == "aarch64" ]]; then
+              curl -L "https://github.com/a-h/templ/releases/download/$TEMPL_VERSION/templ_Linux_arm64.tar.gz" | tar -xz -C /tmp
+            fi
+          else
+            echo "⚠️  Unsupported OS for binary install, falling back to go install..."
+            go install github.com/a-h/templ/cmd/templ@latest
+            exit 0
+          fi
+          sudo mv /tmp/templ $(go env GOPATH)/bin/templ || mv /tmp/templ $(go env GOPATH)/bin/templ
+          chmod +x $(go env GOPATH)/bin/templ
+          echo "✅ templ $TEMPL_VERSION installed"
+        fi
+      - |
+        if ! command -v sqlc &> /dev/null; then
+          echo "Installing sqlc (latest)..."
+          # Get latest version
+          SQLC_VERSION=$(curl -s https://api.github.com/repos/sqlc-dev/sqlc/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          SQLC_VERSION_CLEAN=${SQLC_VERSION#v}
+          echo "Resolved sqlc version: $SQLC_VERSION"
+          
+          if [[ "$OSTYPE" == "darwin"* ]]; then
+            ARCH=$(uname -m)
+            if [[ "$ARCH" == "arm64" ]]; then
+              curl -L "https://github.com/sqlc-dev/sqlc/releases/download/$SQLC_VERSION/sqlc_${SQLC_VERSION_CLEAN}_darwin_arm64.tar.gz" | tar -xz -C /tmp
+            else
+              curl -L "https://github.com/sqlc-dev/sqlc/releases/download/$SQLC_VERSION/sqlc_${SQLC_VERSION_CLEAN}_darwin_amd64.tar.gz" | tar -xz -C /tmp
+            fi
+          elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            ARCH=$(uname -m)
+            if [[ "$ARCH" == "x86_64" ]]; then
+              curl -L "https://github.com/sqlc-dev/sqlc/releases/download/$SQLC_VERSION/sqlc_${SQLC_VERSION_CLEAN}_linux_amd64.tar.gz" | tar -xz -C /tmp
+            elif [[ "$ARCH" == "aarch64" ]]; then
+              curl -L "https://github.com/sqlc-dev/sqlc/releases/download/$SQLC_VERSION/sqlc_${SQLC_VERSION_CLEAN}_linux_arm64.tar.gz" | tar -xz -C /tmp
+            fi
+          else
+            echo "⚠️  Unsupported OS for binary install, falling back to go install..."
+            go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+            exit 0
+          fi
+          sudo mv /tmp/sqlc $(go env GOPATH)/bin/sqlc || mv /tmp/sqlc $(go env GOPATH)/bin/sqlc
+          chmod +x $(go env GOPATH)/bin/sqlc
+          echo "✅ sqlc $SQLC_VERSION installed"
+        fi
       - |
         if ! command -v golangci-lint &> /dev/null; then
           echo "Installing golangci-lint..."
