@@ -15,15 +15,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Starting the Server
 ```bash
-# Primary methods
-go run main.go          # Using main.go directly
+# Development (requires ngrok for OAuth)
+task dev               # Hot reloading with air (recommended)
+task watch             # Alias for task dev
+
+# Production/simple
 go run . start          # Using Cobra CLI command
 task run               # Using Taskfile
-make run               # Using Makefile
 
-# Development with hot reloading
-task watch             # Uses reflex to watch .go and .templ files
-task dev               # Uses air for hot reloading
+# Prerequisites for development
+ngrok http 3000        # Required for OAuth (run in separate terminal)
+docker-compose up -d   # Start PostgreSQL database
 ```
 
 ### Building
@@ -61,22 +63,13 @@ task dev-reset        # Reset environment to clean state
 
 # Repository management
 task branch-status    # Show comprehensive repo status
-task git-cleanup      # Clean up stale branches and worktrees
-
-# Traditional commands (still available)
-make lint             # Run golangci-lint v2 with comprehensive checks
-make format           # Format with goimports
+task git-cleanup      # Clean up stale branches
 
 # GitHub issue management (via Task)
 task issue-list       # List open issues
 task issue-create     # Create new issue
 gh issue view <num>   # View specific issue
 gh issue close <num>  # Close completed issue
-
-# Development workflow with worktrees (via Task)
-task worktree-dev ISSUE=<num>     # Create worktree from GitHub issue number
-task worktree-list                # List all worktrees
-task worktree-cleanup BRANCH=<name>  # Clean up worktree and branch after PR merge
 
 # Pull request management (via Task)
 task pr-create        # Create PR from current branch
@@ -136,16 +129,25 @@ server/
 
 ### Required Setup
 1. Copy `config.yaml.example` to `config.yaml`
-2. Configure OAuth client settings for Bluesky integration
-3. Set up JWKS (JSON Web Key Set) for token signing
-4. Configure PDS endpoint and database connection
+2. Start PostgreSQL: `docker-compose up -d postgres`
+3. Run migrations: `task db-migrate`
+4. Configure OAuth client settings for ngrok URL (for development)
+5. Set up JWKS (JSON Web Key Set) for token signing
 
 ### Key Configuration Areas
 - `app_env`: Set to "development" or "production"
 - `pds_endpoint`: Your Personal Data Server URL
-- `oauth_client_id` and `oauth_redirect_url`: OAuth integration
+- `oauth_client_id` and `oauth_redirect_url`: Must use ngrok URLs for development OAuth
 - `jwks_private`/`jwks_public`: Cryptographic keys for tokens
-- `database_url`: Database connection string (configurable for SQLite or PostgreSQL)
+- `database_url`: PostgreSQL connection string (development via Docker Compose)
+
+### Development OAuth Setup
+For local development, OAuth requires publicly accessible URLs:
+1. Start ngrok: `ngrok http 3000`
+2. Update config.yaml with ngrok URLs:
+   - `oauth_client_id`: `https://your-ngrok-url.ngrok.app/auth/client-metadata.json`
+   - `oauth_redirect_url`: `https://your-ngrok-url.ngrok.app/auth/callback`
+   - `public_domain`: `https://your-ngrok-url.ngrok.app`
 
 ## ATProtocol Integration
 
@@ -162,21 +164,28 @@ The application defines custom lexicons under `quest.dis.*`:
 ## Database Architecture
 
 ### Database Stack
-- **Query Generation**: SQLC for type-safe Go code generation from SQL
+- **Query Generation**: SQLC for type-safe Go code generation from SQL (PostgreSQL engine)
 - **Migrations**: Tern for database schema migrations
-- **Database Engines**: 
-  - **SQLite**: Recommended for development/testing (auto-detected from file paths)
-  - **PostgreSQL**: Recommended for production (auto-detected from connection strings)
-- **Driver Detection**: Automatic based on `database_url` format in config
-- **Query Organization**: All SQL queries should be kept in a single query file
+- **Database Engine**: PostgreSQL 17 (via Docker Compose for development)
+- **Local Development**: Docker Compose with PostgreSQL 17
+- **Production**: PostgreSQL (via Neon or other hosted PostgreSQL)
+- **Query Organization**: All SQL queries in `internal/db/queries.sql` with PostgreSQL syntax
 
 ### Database Workflow
-1. Write SQL queries in the central query file
-2. Run `sqlc generate` to generate Go code from SQL
-3. Use Tern for database migrations: `tern migrate`
-4. Choose database engine by setting `database_url` in config.yaml:
-   - SQLite: `./disquest.db` or `file:path/to/db.sqlite`
-   - PostgreSQL: `postgres://user:pass@host:port/dbname`
+1. Start PostgreSQL: `docker-compose up -d postgres`
+2. Write SQL queries in `internal/db/queries.sql` (PostgreSQL syntax with $1, $2, etc.)
+3. Run `sqlc generate` to generate Go code from SQL
+4. Create migrations in `migrations/` directory
+5. Apply migrations: `task db-migrate`
+6. Check status: `task db-status`
+
+### Database Commands
+```bash
+task db-migrate        # Apply pending migrations
+task db-status         # Check migration status
+task db-rollback       # Rollback last migration
+task db-reset          # Reset and reapply all migrations
+```
 
 ## Development Workflow
 
@@ -187,13 +196,12 @@ task dev-setup        # Complete environment setup (tools + hooks + generation)
 ```
 This replaces manual tool installation, git hooks setup, and initial code generation.
 
-### Issue-Based Development
+### Standard Development Workflow
 1. **Create/Select Issue**: Use `task issue-create` or `task issue-list` to manage work
-2. **Create Worktree**: Use `task worktree-dev ISSUE=<number>` to create a dedicated worktree
-3. **Develop**: Work in the isolated worktree environment (created in `../dis.quest-issue-<num>/`)
-4. **Link Commits**: Use `fixes #<issue-number>` or `closes #<issue-number>` in commit messages
+2. **Create Branch**: `git checkout -b feature/issue-description`
+3. **Develop**: Make changes, commit with `fixes #<issue-number>` in commit messages
+4. **Quality Check**: Run `task dev-check` before committing
 5. **Create PR**: Use `task pr-create` when ready to merge back to main
-6. **Post-Merge Cleanup**: Use `task worktree-cleanup BRANCH=issue-<number>` to clean up worktree and branches automatically
 
 ### Template Development
 1. Edit `.templ` files in `components/`
@@ -202,25 +210,18 @@ This replaces manual tool installation, git hooks setup, and initial code genera
 4. Build/run normally with Go commands
 
 ### Database Development
-1. Add SQL queries to the central query file
+1. Add SQL queries to `internal/db/queries.sql` (PostgreSQL syntax)
 2. Run `sqlc generate` to generate type-safe Go code
-3. Create migrations using Tern for schema changes
-4. **Run `golangci-lint run` to validate generated code**
-5. Test with SQLite locally, deploy with configurable database
+3. Create migrations in `migrations/` directory
+4. Apply migrations: `task db-migrate`
+5. **Run `golangci-lint run` to validate generated code**
 
-### Standard Development Cycle
-1. **Start with Issue**: Use `task worktree-dev ISSUE=<number>` for isolated development
-2. Make your changes (code, templates, SQL, etc.)
-3. **Quality Check**: Use `task dev-check` (replaces steps 3-5 below)
+### Daily Development Cycle
+1. Make your changes (code, templates, SQL, etc.)
+2. **Quality Check**: Use `task dev-check` for full validation
    - Alternative: `task quick-fix` for faster iteration without tests
-4. Commit with conventional commit message (use `task commit-check` for validation)
-5. **Create PR**: Use `task pr-create` to submit for review
-6. **Cleanup**: After PR merge, use `task worktree-cleanup BRANCH=issue-<number>`
-
-### Legacy Development Cycle (manual steps)
-1. Run any required code generation (`templ generate`, `sqlc generate`)
-2. **MANDATORY: Run `golangci-lint run` and fix all issues**
-3. Run tests: `go test ./...`
+3. Commit with conventional commit message
+4. **Create PR**: Use `task pr-create` to submit for review
 
 ### Code Quality Requirements
 - **Conventional Commits**: Use simple format without scopes: `type: description`
@@ -264,10 +265,13 @@ Commit message validation:
 task dev-setup
 
 # Daily development
-task worktree-dev ISSUE=123    # Start new feature
+task dev                       # Start development server with hot reload
 task dev-check                 # Ready to commit?
 task pr-create                 # Submit for review
-task worktree-cleanup BRANCH=issue-123  # After merge
+
+# Database
+task db-migrate                # Apply migrations
+task db-status                 # Check migration status
 
 # Troubleshooting
 task branch-status             # What's my status?
@@ -307,7 +311,7 @@ When Claude Code asks about project status or needs updates:
 ```bash
 task project-health    # Comprehensive health check
 task docs-status       # Check if documentation needs updating
-task branch-status     # Current git and worktree status
+task branch-status     # Current git status
 ```
 
 ### Before Making Changes

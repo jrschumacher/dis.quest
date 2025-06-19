@@ -40,6 +40,18 @@ tasks:
           echo "✅ gh found"
         fi
 
+        if ! command -v air &> /dev/null; then
+          echo "⚠️  air not found (optional for hot reloading)"
+        else
+          echo "✅ air found"
+        fi
+
+        if ! command -v ngrok &> /dev/null; then
+          echo "⚠️  ngrok not found (required for development OAuth)"
+        else
+          echo "✅ ngrok found"
+        fi
+
         if [ -n "$missing_tools" ]; then
           echo ""
           echo "Missing required tools:$missing_tools"
@@ -78,6 +90,28 @@ tasks:
             echo "⚠️  Please install GitHub CLI manually for your OS: https://cli.github.com/"
           fi
         fi
+      - |
+        if ! command -v air &> /dev/null; then
+          echo "Installing air for hot reloading..."
+          go install github.com/air-verse/air@latest
+        fi
+      - |
+        if ! command -v ngrok &> /dev/null; then
+          echo "Installing ngrok..."
+          if [[ "$OSTYPE" == "darwin"* ]]; then
+            if command -v brew &> /dev/null; then
+              brew install ngrok/ngrok/ngrok
+            else
+              echo "⚠️  Please install ngrok manually: https://ngrok.com/download"
+            fi
+          elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+            echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+            sudo apt update && sudo apt install ngrok
+          else
+            echo "⚠️  Please install ngrok manually: https://ngrok.com/download"
+          fi
+        fi
       - echo "✅ All tools installed successfully"
 
   run:
@@ -98,16 +132,17 @@ tasks:
       - docker build .
 
   watch:
+    desc: Hot reload development server (alias for dev)
     cmds:
-      - templ generate
-      - reflex -r '\.go$|\.templ$' -s -- sh -c 'go run . start'
-    silent: true
+      - task: dev
 
   test:
     cmds:
       - go test ./...
 
   dev:
+    desc: Start development server with hot reloading
+    deps: [check-tools]
     cmds:
       - air
     silent: false
@@ -116,23 +151,23 @@ tasks:
   db-migrate:
     desc: Run database migrations
     cmds:
-      - tern migrate
+      - tern migrate --migrations ./migrations --config ./tern.conf
 
   db-rollback:
     desc: Rollback last database migration
     cmds:
-      - tern migrate --destination -1
+      - tern migrate --destination -1 --migrations ./migrations --config ./tern.conf
 
   db-reset:
     desc: Reset database to clean state
     cmds:
-      - tern migrate --destination 0
-      - tern migrate
+      - tern migrate --destination 0 --migrations ./migrations --config ./tern.conf
+      - tern migrate --migrations ./migrations --config ./tern.conf
 
   db-status:
     desc: Show database migration status
     cmds:
-      - tern status
+      - tern status --migrations ./migrations --config ./tern.conf
 
   generate:
     desc: Generate all code (templ + sqlc)
@@ -147,50 +182,6 @@ tasks:
       - golangci-lint run
 
   # GitHub workflow tasks
-  worktree-dev:
-    desc: Create worktree for GitHub issue development
-    summary: |
-      Creates a new worktree for developing a GitHub issue.
-      Usage: task worktree-dev ISSUE=123
-      This creates a worktree in ../dis.quest-issue-123/ with branch issue-123
-    vars:
-      ISSUE: '{{.ISSUE | default ""}}'
-      BRANCH_NAME: 'issue-{{.ISSUE}}'
-      WORKTREE_PATH: '../dis.quest-{{.BRANCH_NAME}}'
-    preconditions:
-      - sh: '[ -n "{{.ISSUE}}" ]'
-        msg: 'Please provide an issue number - task worktree-dev ISSUE=123'
-      - sh: 'command -v gh &> /dev/null'
-        msg: 'GitHub CLI (gh) is required. Run "task install-tools" to install it.'
-    cmds:
-      - echo "Creating worktree for issue #{{.ISSUE}}..."
-      - gh issue view {{.ISSUE}} --json title,url
-      - git worktree add {{.WORKTREE_PATH}} -b {{.BRANCH_NAME}}
-      - echo "Worktree created at {{.WORKTREE_PATH}}"
-      - echo "To switch cd {{.WORKTREE_PATH}}"
-
-  worktree-list:
-    desc: List all active worktrees
-    cmds:
-      - git worktree list
-
-  worktree-cleanup:
-    desc: Clean up merged worktree and branch
-    summary: |
-      Cleans up a worktree and its associated branch after PR merge.
-      Usage: task worktree-cleanup BRANCH=issue-123
-    vars:
-      BRANCH: '{{.BRANCH | default ""}}'
-      WORKTREE_PATH: '../dis.quest-{{.BRANCH}}'
-    preconditions:
-      - sh: '[ -n "{{.BRANCH}}" ]'
-        msg: 'Please provide a branch name task worktree-cleanup BRANCH=issue-123'
-    cmds:
-      - echo "Cleaning up worktree for branch {{.BRANCH}}..."
-      - git worktree remove {{.WORKTREE_PATH}} || echo "Worktree already removed"
-      - git branch -d {{.BRANCH}} || echo "Branch already deleted or not merged"
-      - git remote prune origin
-      - echo "✅ Cleanup complete"
 
   pr-create:
     desc: Create pull request from current branch
@@ -245,16 +236,13 @@ tasks:
       - echo "✅ Development environment ready!"
 
   git-cleanup:
-    desc: Clean up all stale git branches and worktrees
+    desc: Clean up stale git branches
     summary: |
       Performs comprehensive git cleanup:
-      - Lists and optionally removes stale worktrees
       - Deletes merged local branches
       - Prunes stale remote-tracking branches
     cmds:
       - echo "🧹 Cleaning up git repository..."
-      - echo "📋 Current worktrees:"
-      - git worktree list
       - echo "🔄 Pruning remote branches..."
       - git remote prune origin
       - echo "📋 Merged branches that can be deleted:"
@@ -281,8 +269,8 @@ tasks:
       - echo "📋 Repository Status:"
       - echo "Current branch - $(git branch --show-current)"
       - echo ""
-      - echo "📁 Active worktrees:"
-      - git worktree list
+      - echo "📁 Git status:"
+      - git status --short
       - echo ""
       - echo "🌿 Local branches:"
       - git branch -vv
@@ -340,8 +328,8 @@ tasks:
       - echo "Taskfile.yml last modified - $(stat -f %Sm -t %Y-%m-%d\ %H:%M Taskfile.yml 2>/dev/null || echo 'File not found')"
       - echo ""
       - echo "🌿 CURRENT BRANCH - $(git branch --show-current 2>/dev/null || echo 'Unknown')"
-      - echo "📊 WORKTREES:"
-      - git worktree list 2>/dev/null || echo "No worktrees or not a git repo"
+      - echo "📊 GIT STATUS:"
+      - git status --short 2>/dev/null || echo "Not a git repository"
       - echo ""
       - echo "🛠️  TOOLS STATUS:"
       - task check-tools
@@ -445,34 +433,48 @@ tasks:
       - echo "🔧 For Development:"
       - echo "  task dev-check          # Quality validation"
       - echo "  task issue-list         # Current work items"
-      - echo "  task worktree-list      # Active development"
+      - echo "  task branch-status      # Git status"
       - echo ""
       - echo "💡 TIP Run 'task claude-context' when starting a session"
       - echo "    to give Claude Code the best understanding of your project!"
 
   # Help and quickstart tasks
   help:
-    desc: Show comprehensive project help and quickstart guide
+    desc: Show project README and documentation
     summary: |
-      Displays the quickstart guide using a pager (more/less).
-      Perfect for new contributors or as a reference.
+      Displays the project README using a pager (more/less).
+      For development workflow, see CLAUDE.md and HUMAN.md.
     cmds:
       - |
         if command -v less &> /dev/null; then
-          less QUICKSTART.md
+          less README.md
         elif command -v more &> /dev/null; then
-          more QUICKSTART.md
+          more README.md
         else
-          cat QUICKSTART.md
+          cat README.md
         fi
 
   quickstart:
-    desc: Launch interactive quickstart guide
+    desc: Show getting started information
     summary: |
-      Opens the comprehensive quickstart guide in a pager.
-      Covers first-time setup, daily workflow, and essential commands.
+      Quick overview of getting started with development.
+      Use 'task dev-setup' for complete environment setup.
     cmds:
-      - task: help
+      - echo "🚀 Quick Start Guide"
+      - echo "=================="
+      - echo ""
+      - echo "1. First-time setup:"
+      - echo "   task dev-setup"
+      - echo ""
+      - echo "2. Start development:"
+      - echo "   docker-compose up -d postgres"
+      - echo "   ngrok http 3000    # (in separate terminal)"
+      - echo "   task dev"
+      - echo ""
+      - echo "3. Documentation:"
+      - echo "   task help        # Project overview (README)"
+      - echo "   CLAUDE.md        # AI assistant instructions"
+      - echo "   HUMAN.md         # Human prompting guide"
 
   welcome:
     desc: Show welcome message for new contributors

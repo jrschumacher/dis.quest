@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -12,6 +13,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"time"
 )
 
 // CreateSessionRequest represents a session creation request
@@ -135,4 +138,93 @@ func GetDPoPKeyFromCookie(r *http.Request) (*ecdsa.PrivateKey, error) {
 		return nil, err
 	}
 	return DecodeDPoPPrivateKeyFromPEM(cookie.Value)
+}
+
+// DPoPJWTHeader represents the header of a DPoP JWT
+type DPoPJWTHeader struct {
+	Typ string                 `json:"typ"`
+	Alg string                 `json:"alg"`
+	JWK map[string]interface{} `json:"jwk"`
+}
+
+// DPoPJWTPayload represents the payload of a DPoP JWT
+type DPoPJWTPayload struct {
+	JTI   string `json:"jti"`
+	HTM   string `json:"htm"`
+	HTU   string `json:"htu"`
+	IAT   int64  `json:"iat"`
+	Nonce string `json:"nonce,omitempty"`
+}
+
+// CreateDPoPJWT creates a DPoP JWT for the given HTTP method and URL
+func CreateDPoPJWT(key *ecdsa.PrivateKey, method, targetURL string) (string, error) {
+	return CreateDPoPJWTWithNonce(key, method, targetURL, "")
+}
+
+// CreateDPoPJWTWithNonce creates a DPoP JWT for the given HTTP method and URL with optional nonce
+func CreateDPoPJWTWithNonce(key *ecdsa.PrivateKey, method, targetURL, nonce string) (string, error) {
+	// Parse the URL to get the scheme, host, and path (no query or fragment)
+	u, err := url.Parse(targetURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid target URL: %w", err)
+	}
+	
+	// HTU should be scheme + host + path (no query or fragment)
+	htu := fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, u.Path)
+	
+	// Create the key pair wrapper to get JWK
+	keyPair := &DPoPKeyPair{PrivateKey: key}
+	
+	// Create header
+	header := DPoPJWTHeader{
+		Typ: "dpop+jwt",
+		Alg: "ES256",
+		JWK: keyPair.DPoPPublicJWK(),
+	}
+	
+	// Generate random JTI (nonce)
+	jtiBytes := make([]byte, 16)
+	if _, err := rand.Read(jtiBytes); err != nil {
+		return "", fmt.Errorf("failed to generate JTI: %w", err)
+	}
+	jti := base64.RawURLEncoding.EncodeToString(jtiBytes)
+	
+	// Create payload
+	payload := DPoPJWTPayload{
+		JTI:   jti,
+		HTM:   method,
+		HTU:   htu,
+		IAT:   time.Now().Unix(),
+		Nonce: nonce,
+	}
+	
+	// Encode header and payload
+	headerBytes, err := json.Marshal(header)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal header: %w", err)
+	}
+	
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal payload: %w", err)
+	}
+	
+	headerEncoded := base64.RawURLEncoding.EncodeToString(headerBytes)
+	payloadEncoded := base64.RawURLEncoding.EncodeToString(payloadBytes)
+	
+	// Create signing input
+	signingInput := headerEncoded + "." + payloadEncoded
+	
+	// Sign
+	hash := sha256.Sum256([]byte(signingInput))
+	r, s, err := ecdsa.Sign(rand.Reader, key, hash[:])
+	if err != nil {
+		return "", fmt.Errorf("failed to sign DPoP JWT: %w", err)
+	}
+	
+	// Encode signature
+	signature := append(r.Bytes(), s.Bytes()...)
+	signatureEncoded := base64.RawURLEncoding.EncodeToString(signature)
+	
+	return signingInput + "." + signatureEncoded, nil
 }

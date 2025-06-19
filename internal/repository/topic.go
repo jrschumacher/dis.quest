@@ -102,8 +102,8 @@ func (r *topicRepository) GetTopic(ctx context.Context, did, rkey string) (*Topi
 // ListTopics retrieves a paginated list of topics
 func (r *topicRepository) ListTopics(ctx context.Context, params ListTopicsParams) ([]*TopicSummary, error) {
 	topics, err := r.dbService.Queries().ListTopics(ctx, db.ListTopicsParams{
-		Limit:  int64(params.Limit),
-		Offset: int64(params.Offset),
+		Limit:  int32(params.Limit),
+		Offset: int32(params.Offset),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list topics: %w", err)
@@ -147,7 +147,7 @@ func (r *topicRepository) ListTopics(ctx context.Context, params ListTopicsParam
 func (r *topicRepository) GetTopicsByCategory(ctx context.Context, category string, limit int) ([]*TopicSummary, error) {
 	topics, err := r.dbService.Queries().GetTopicsByCategory(ctx, db.GetTopicsByCategoryParams{
 		Category: sql.NullString{String: category, Valid: category != ""},
-		Limit:    int64(limit),
+		Limit:    int32(limit),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get topics by category: %w", err)

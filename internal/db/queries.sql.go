@@ -15,7 +15,7 @@ const CreateMessage = `-- name: CreateMessage :one
 INSERT INTO quest_dis_message (
     did, rkey, topic_did, topic_rkey, parent_message_rkey, content, created_at, updated_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?
+    $1, $2, $3, $4, $5, $6, $7, $8
 ) RETURNING did, rkey, topic_did, topic_rkey, parent_message_rkey, content, created_at, updated_at
 `
 
@@ -60,7 +60,7 @@ const CreateParticipation = `-- name: CreateParticipation :one
 INSERT INTO quest_dis_participation (
     did, topic_did, topic_rkey, status, created_at, updated_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?
+    $1, $2, $3, $4, $5, $6
 ) RETURNING did, topic_did, topic_rkey, status, created_at, updated_at
 `
 
@@ -100,7 +100,7 @@ const CreateTopic = `-- name: CreateTopic :one
 INSERT INTO quest_dis_topic (
     did, rkey, subject, initial_message, category, created_at, updated_at, selected_answer
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?
+    $1, $2, $3, $4, $5, $6, $7, $8
 ) RETURNING did, rkey, subject, initial_message, category, created_at, updated_at, selected_answer
 `
 
@@ -145,7 +145,7 @@ func (q *Queries) CreateTopic(ctx context.Context, arg CreateTopicParams) (Topic
 
 const DeleteMessage = `-- name: DeleteMessage :exec
 DELETE FROM quest_dis_message
-WHERE did = ? AND rkey = ?
+WHERE did = $1 AND rkey = $2
 `
 
 type DeleteMessageParams struct {
@@ -160,7 +160,7 @@ func (q *Queries) DeleteMessage(ctx context.Context, arg DeleteMessageParams) er
 
 const DeleteParticipation = `-- name: DeleteParticipation :exec
 DELETE FROM quest_dis_participation
-WHERE did = ? AND topic_did = ? AND topic_rkey = ?
+WHERE did = $1 AND topic_did = $2 AND topic_rkey = $3
 `
 
 type DeleteParticipationParams struct {
@@ -176,7 +176,7 @@ func (q *Queries) DeleteParticipation(ctx context.Context, arg DeleteParticipati
 
 const DeleteTopic = `-- name: DeleteTopic :exec
 DELETE FROM quest_dis_topic
-WHERE did = ? AND rkey = ?
+WHERE did = $1 AND rkey = $2
 `
 
 type DeleteTopicParams struct {
@@ -191,7 +191,7 @@ func (q *Queries) DeleteTopic(ctx context.Context, arg DeleteTopicParams) error 
 
 const GetMessage = `-- name: GetMessage :one
 SELECT did, rkey, topic_did, topic_rkey, parent_message_rkey, content, created_at, updated_at FROM quest_dis_message
-WHERE did = ? AND rkey = ?
+WHERE did = $1 AND rkey = $2
 `
 
 type GetMessageParams struct {
@@ -217,7 +217,7 @@ func (q *Queries) GetMessage(ctx context.Context, arg GetMessageParams) (Message
 
 const GetMessagesByTopic = `-- name: GetMessagesByTopic :many
 SELECT did, rkey, topic_did, topic_rkey, parent_message_rkey, content, created_at, updated_at FROM quest_dis_message
-WHERE topic_did = ? AND topic_rkey = ?
+WHERE topic_did = $1 AND topic_rkey = $2
 ORDER BY created_at ASC
 `
 
@@ -260,7 +260,7 @@ func (q *Queries) GetMessagesByTopic(ctx context.Context, arg GetMessagesByTopic
 
 const GetParticipation = `-- name: GetParticipation :one
 SELECT did, topic_did, topic_rkey, status, created_at, updated_at FROM quest_dis_participation
-WHERE did = ? AND topic_did = ? AND topic_rkey = ?
+WHERE did = $1 AND topic_did = $2 AND topic_rkey = $3
 `
 
 type GetParticipationParams struct {
@@ -285,7 +285,7 @@ func (q *Queries) GetParticipation(ctx context.Context, arg GetParticipationPara
 
 const GetParticipationsByTopic = `-- name: GetParticipationsByTopic :many
 SELECT did, topic_did, topic_rkey, status, created_at, updated_at FROM quest_dis_participation
-WHERE topic_did = ? AND topic_rkey = ?
+WHERE topic_did = $1 AND topic_rkey = $2
 `
 
 type GetParticipationsByTopicParams struct {
@@ -325,7 +325,7 @@ func (q *Queries) GetParticipationsByTopic(ctx context.Context, arg GetParticipa
 
 const GetParticipationsByUser = `-- name: GetParticipationsByUser :many
 SELECT did, topic_did, topic_rkey, status, created_at, updated_at FROM quest_dis_participation
-WHERE did = ?
+WHERE did = $1
 ORDER BY created_at DESC
 `
 
@@ -361,7 +361,7 @@ func (q *Queries) GetParticipationsByUser(ctx context.Context, did string) ([]Pa
 
 const GetRepliesByMessage = `-- name: GetRepliesByMessage :many
 SELECT did, rkey, topic_did, topic_rkey, parent_message_rkey, content, created_at, updated_at FROM quest_dis_message
-WHERE topic_did = ? AND topic_rkey = ? AND parent_message_rkey = ?
+WHERE topic_did = $1 AND topic_rkey = $2 AND parent_message_rkey = $3
 ORDER BY created_at ASC
 `
 
@@ -405,7 +405,7 @@ func (q *Queries) GetRepliesByMessage(ctx context.Context, arg GetRepliesByMessa
 
 const GetTopic = `-- name: GetTopic :one
 SELECT did, rkey, subject, initial_message, category, created_at, updated_at, selected_answer FROM quest_dis_topic
-WHERE did = ? AND rkey = ?
+WHERE did = $1 AND rkey = $2
 `
 
 type GetTopicParams struct {
@@ -431,14 +431,14 @@ func (q *Queries) GetTopic(ctx context.Context, arg GetTopicParams) (Topic, erro
 
 const GetTopicsByCategory = `-- name: GetTopicsByCategory :many
 SELECT did, rkey, subject, initial_message, category, created_at, updated_at, selected_answer FROM quest_dis_topic
-WHERE category = ?
+WHERE category = $1
 ORDER BY created_at DESC
-LIMIT ?
+LIMIT $2
 `
 
 type GetTopicsByCategoryParams struct {
 	Category sql.NullString `json:"category"`
-	Limit    int64          `json:"limit"`
+	Limit    int32          `json:"limit"`
 }
 
 func (q *Queries) GetTopicsByCategory(ctx context.Context, arg GetTopicsByCategoryParams) ([]Topic, error) {
@@ -476,12 +476,12 @@ func (q *Queries) GetTopicsByCategory(ctx context.Context, arg GetTopicsByCatego
 const ListTopics = `-- name: ListTopics :many
 SELECT did, rkey, subject, initial_message, category, created_at, updated_at, selected_answer FROM quest_dis_topic
 ORDER BY created_at DESC
-LIMIT ? OFFSET ?
+LIMIT $1 OFFSET $2
 `
 
 type ListTopicsParams struct {
-	Limit  int64 `json:"limit"`
-	Offset int64 `json:"offset"`
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
 }
 
 func (q *Queries) ListTopics(ctx context.Context, arg ListTopicsParams) ([]Topic, error) {
@@ -518,8 +518,8 @@ func (q *Queries) ListTopics(ctx context.Context, arg ListTopicsParams) ([]Topic
 
 const UpdateParticipationStatus = `-- name: UpdateParticipationStatus :exec
 UPDATE quest_dis_participation
-SET status = ?, updated_at = ?
-WHERE did = ? AND topic_did = ? AND topic_rkey = ?
+SET status = $1, updated_at = $2
+WHERE did = $3 AND topic_did = $4 AND topic_rkey = $5
 `
 
 type UpdateParticipationStatusParams struct {
@@ -543,8 +543,8 @@ func (q *Queries) UpdateParticipationStatus(ctx context.Context, arg UpdateParti
 
 const UpdateTopicSelectedAnswer = `-- name: UpdateTopicSelectedAnswer :exec
 UPDATE quest_dis_topic
-SET selected_answer = ?, updated_at = ?
-WHERE did = ? AND rkey = ?
+SET selected_answer = $1, updated_at = $2
+WHERE did = $3 AND rkey = $4
 `
 
 type UpdateTopicSelectedAnswerParams struct {
