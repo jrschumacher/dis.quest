@@ -206,7 +206,7 @@ This replaces manual tool installation, git hooks setup, and initial code genera
 ### Template Development
 1. Edit `.templ` files in `components/`
 2. Run `templ generate` to create corresponding `_templ.go` files
-3. **Run `golangci-lint run` to check for issues**
+3. **Run `task lint` to check for issues**
 4. Build/run normally with Go commands
 
 ### Database Development
@@ -214,7 +214,7 @@ This replaces manual tool installation, git hooks setup, and initial code genera
 2. Run `sqlc generate` to generate type-safe Go code
 3. Create migrations in `migrations/` directory
 4. Apply migrations: `task db-migrate`
-5. **Run `golangci-lint run` to validate generated code**
+5. **Run `task lint` to validate generated code**
 
 ### Daily Development Cycle
 1. Make your changes (code, templates, SQL, etc.)
@@ -228,15 +228,15 @@ This replaces manual tool installation, git hooks setup, and initial code genera
   - Types: `feat`, `fix`, `chore`, `docs`, `style`, `refactor`, `test`, `perf`, `ci`, `build`, `revert`
   - Examples: `feat: add user authentication`, `fix: resolve database connection issue`, `chore: update dependencies`
 - **Automated Quality Checks**: Lefthook git hooks handle most quality checks automatically
-- Manual checks (if not using lefthook): Run `goimports`, `templ generate`, `sqlc generate`, and `golangci-lint run`
-- **CRITICAL**: Always run `golangci-lint run` after ANY unit of work (feature, bug fix, refactor)
-- Always test before submitting: `go test ./...`
+- Manual checks (if not using lefthook): Run `task dev-check` or individual commands like `task lint`
+- **CRITICAL**: Always run `task lint` after ANY unit of work (feature, bug fix, refactor)
+- Always test before submitting: `task test`
 
 ### Git Hooks (Lefthook)
 Pre-commit hooks automatically:
 - Format Go code with goimports
 - Generate templ and SQLC code when files change
-- Run golangci-lint with auto-fix
+- Run linting with auto-fix
 - Check for TODO/FIXME comments
 
 Pre-push hooks automatically:
