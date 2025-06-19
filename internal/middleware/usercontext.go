@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/jrschumacher/dis.quest/internal/auth"
+	"github.com/jrschumacher/dis.quest/internal/jwtutil"
 	"github.com/jrschumacher/dis.quest/internal/logger"
-	"github.com/jrschumacher/dis.quest/pkg/atproto"
 )
 
 // UserContext holds user information extracted from JWT
@@ -34,7 +34,7 @@ func UserContextMiddleware(next http.Handler) http.Handler {
 
 		// Parse JWT to get claims (without verification for now in development)
 		// TODO: In production, implement proper JWT verification with JWKS
-		claims, err := atproto.ParseJWTWithoutVerification(token)
+		claims, err := jwtutil.ParseJWTWithoutVerification(token)
 		if err != nil {
 			logger.Warn("Failed to parse JWT claims", "error", err)
 			// Continue without user context rather than failing

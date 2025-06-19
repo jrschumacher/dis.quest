@@ -10,7 +10,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -50,7 +49,7 @@ func CreateSession(pds, handle, password string) (*CreateSessionResponse, error)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
-		return nil, errors.New("invalid credentials or failed to create session")
+		return nil, ErrInvalidCredentials
 	}
 	var out CreateSessionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
@@ -92,7 +91,7 @@ func DecodeDPoPPrivateKeyFromPEM(pemStr string) (*ecdsa.PrivateKey, error) {
 	}
 	block, _ := pem.Decode(pemBytes)
 	if block == nil {
-		return nil, errors.New("invalid PEM block")
+		return nil, ErrInvalidPEMBlock
 	}
 	return x509.ParseECPrivateKey(block.Bytes)
 }

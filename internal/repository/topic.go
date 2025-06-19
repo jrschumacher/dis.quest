@@ -54,7 +54,7 @@ func (r *topicRepository) GetTopic(ctx context.Context, did, rkey string) (*Topi
 	})
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("topic not found")
+			return nil, ErrTopicNotFound
 		}
 		return nil, fmt.Errorf("failed to get topic: %w", err)
 	}
@@ -204,13 +204,13 @@ func (r *topicRepository) UpdateSelectedAnswer(ctx context.Context, topicDID, to
 	})
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return fmt.Errorf("topic not found")
+			return ErrTopicNotFound
 		}
 		return fmt.Errorf("failed to get topic: %w", err)
 	}
 	
 	if topic.Did != userDID {
-		return fmt.Errorf("unauthorized: only topic creator can select answer")
+		return ErrTopicOwnershipRequired
 	}
 	
 	// Update the selected answer
