@@ -232,6 +232,31 @@ This replaces manual tool installation, git hooks setup, and initial code genera
 - **CRITICAL**: Always run `task lint` after ANY unit of work (feature, bug fix, refactor)
 - Always test before submitting: `task test`
 
+### Tool Installation Optimization
+- **Local Development**: `task install-tools` uses pre-compiled binaries for 90% faster installation
+  - Downloads templ and sqlc binaries directly from GitHub releases
+  - Automatically resolves "latest" to actual version numbers for consistency
+  - Architecture detection for macOS (arm64/x86_64) and Linux (x86_64/aarch64)
+  - Falls back to `go install` for unsupported platforms
+- **GitHub Actions**: Use `.github/actions/setup-tools` composite action
+  - Reusable across all workflows with configurable versions
+  - Defaults to "latest" but supports pinning specific versions
+  - Same binary optimization and version resolution as local development
+  - Automatic architecture detection and fallback
+- **Version Consistency**: Both local and CI use GitHub API to resolve "latest" to exact versions
+  - Eliminates version drift between local development and CI
+  - Shows resolved version numbers during installation
+  - Supports explicit version pinning when needed
+
+### Taskfile Output Guidelines
+- **Informational Tasks**: Use `silent: true` for tasks that display formatted information
+  - Multiple separate `echo` commands render cleanly without task execution noise
+  - Preferred approach for help, status, and context display tasks
+- **Working Tasks**: For tasks that perform work, avoid `silent: true` to show progress
+- **Multi-line Output**: Use separate `echo` commands rather than `echo "line1\nline2"`
+  - Shell `echo` prints `\n` literally unless using `echo -e`
+  - Multiple `echo` commands are more readable and reliable
+
 ### Git Hooks (Lefthook)
 Pre-commit hooks automatically:
 - Format Go code with goimports

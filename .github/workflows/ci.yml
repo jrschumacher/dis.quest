@@ -27,11 +27,8 @@ jobs:
         id: go-version
         run: echo "version=$(grep '^go ' go.mod | cut -d' ' -f2)" >> $GITHUB_OUTPUT
 
-      - name: Install templ
-        run: go install github.com/a-h/templ/cmd/templ@latest
-
-      - name: Install sqlc
-        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+      - name: Setup development tools
+        uses: ./.github/actions/setup-tools
 
       - name: Generate templ files
         run: templ generate

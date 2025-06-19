@@ -1,0 +1,92 @@
+name: 'Setup Development Tools'
+description: 'Install templ and sqlc using pre-compiled binaries for speed'
+
+inputs:
+  templ-version:
+    description: 'Version of templ to install (default: latest)'
+    required: false
+    default: 'latest'
+  sqlc-version:
+    description: 'Version of sqlc to install (default: latest)'
+    required: false
+    default: 'latest'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve versions
+      shell: bash
+      run: |
+        # Resolve templ version
+        if [[ "${{ inputs.templ-version }}" == "latest" ]]; then
+          TEMPL_VERSION=$(curl -s https://api.github.com/repos/a-h/templ/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+        else
+          TEMPL_VERSION="${{ inputs.templ-version }}"
+        fi
+        echo "TEMPL_VERSION=$TEMPL_VERSION" >> $GITHUB_ENV
+        
+        # Resolve sqlc version
+        if [[ "${{ inputs.sqlc-version }}" == "latest" ]]; then
+          SQLC_VERSION=$(curl -s https://api.github.com/repos/sqlc-dev/sqlc/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+        else
+          SQLC_VERSION="${{ inputs.sqlc-version }}"
+        fi
+        echo "SQLC_VERSION=$SQLC_VERSION" >> $GITHUB_ENV
+        
+        echo "📋 Resolved versions:"
+        echo "  templ: $TEMPL_VERSION"
+        echo "  sqlc: $SQLC_VERSION"
+
+    - name: Install templ (binary)
+      shell: bash
+      run: |
+        if ! command -v templ &> /dev/null; then
+          echo "Installing templ $TEMPL_VERSION..."
+          ARCH=$(uname -m)
+          if [[ "$ARCH" == "x86_64" ]]; then
+            curl -L "https://github.com/a-h/templ/releases/download/$TEMPL_VERSION/templ_Linux_x86_64.tar.gz" | tar -xz -C /tmp
+          elif [[ "$ARCH" == "aarch64" ]]; then
+            curl -L "https://github.com/a-h/templ/releases/download/$TEMPL_VERSION/templ_Linux_arm64.tar.gz" | tar -xz -C /tmp
+          else
+            echo "Unsupported architecture, falling back to go install"
+            go install github.com/a-h/templ/cmd/templ@${{ inputs.templ-version }}
+            exit 0
+          fi
+          sudo mv /tmp/templ /usr/local/bin/templ
+          chmod +x /usr/local/bin/templ
+          echo "✅ templ $TEMPL_VERSION installed"
+        else
+          echo "✅ templ already available"
+        fi
+
+    - name: Install sqlc (binary)
+      shell: bash
+      run: |
+        if ! command -v sqlc &> /dev/null; then
+          echo "Installing sqlc $SQLC_VERSION..."
+          ARCH=$(uname -m)
+          # Remove 'v' prefix from version for sqlc download URLs
+          SQLC_VERSION_CLEAN=${SQLC_VERSION#v}
+          if [[ "$ARCH" == "x86_64" ]]; then
+            curl -L "https://github.com/sqlc-dev/sqlc/releases/download/$SQLC_VERSION/sqlc_${SQLC_VERSION_CLEAN}_linux_amd64.tar.gz" | tar -xz -C /tmp
+          elif [[ "$ARCH" == "aarch64" ]]; then
+            curl -L "https://github.com/sqlc-dev/sqlc/releases/download/$SQLC_VERSION/sqlc_${SQLC_VERSION_CLEAN}_linux_arm64.tar.gz" | tar -xz -C /tmp
+          else
+            echo "Unsupported architecture, falling back to go install"
+            go install github.com/sqlc-dev/sqlc/cmd/sqlc@${{ inputs.sqlc-version }}
+            exit 0
+          fi
+          sudo mv /tmp/sqlc /usr/local/bin/sqlc
+          chmod +x /usr/local/bin/sqlc
+          echo "✅ sqlc $SQLC_VERSION installed"
+        else
+          echo "✅ sqlc already available"
+        fi
+
+    - name: Verify installations
+      shell: bash
+      run: |
+        echo "🔍 Verifying tool installations:"
+        templ version || echo "❌ templ not working"
+        sqlc version || echo "❌ sqlc not working"
+        echo "✅ Tool verification complete"
