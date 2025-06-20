@@ -239,15 +239,42 @@ tasks:
     desc: Clean up stale git branches
     summary: |
       Performs comprehensive git cleanup:
-      - Deletes merged local branches
+      - Deletes merged local branches that have merged PRs authored by you
       - Prunes stale remote-tracking branches
+      - Prompts for safe or force deletion as needed
     cmds:
       - echo "🧹 Cleaning up git repository..."
       - echo "🔄 Pruning remote branches..."
       - git remote prune origin
-      - echo "📋 Merged branches that can be deleted:"
-      - git branch --merged main | grep -v main | grep -v '*' || echo "No merged branches to clean"
-      - echo "To delete merged branches run - git branch --merged main | grep -v main | xargs -n 1 git branch -d"
+      - |
+        echo "🔎 Finding local branches with merged PRs authored by you..."
+        merged_pr_branches=$(gh pr list --state merged --author @me --json headRefName -q '.[].headRefName')
+        local_branches=$(git branch --format='%(refname:short)')
+        branches_to_delete=""
+        for branch in $merged_pr_branches; do
+          if echo "$local_branches" | grep -qx "$branch" && [ "$branch" != "main" ]; then
+            branches_to_delete="$branches_to_delete $branch"
+          fi
+        done
+        if [ -z "$branches_to_delete" ]; then
+          echo "✅ No local branches found that correspond to your merged PRs."
+        else
+          echo "The following local branches correspond to merged PRs you authored:"
+          for branch in $branches_to_delete; do
+            echo "  $branch"
+          done
+          printf "\nDo you want to delete these branches? (y/N): "
+          read -r answer
+          if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
+            for branch in $branches_to_delete; do
+              git branch -d "$branch" || {
+                echo "Branch $branch not fully merged locally. Use 'git branch -D $branch' to force delete if desired."
+              }
+            done
+          else
+            echo "No branches deleted."
+          fi
+        fi
 
   commit-check:
     desc: Pre-commit validation (run before committing)

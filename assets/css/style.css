@@ -1,0 +1,146 @@
+/* Modern, stylish customizations layered on top of Pico.css */
+
+body {
+  background: #f4f8fb;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+.brand {
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.card {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(37,99,235,0.06);
+  padding: 2rem;
+  margin-bottom: 2rem;
+  border: none;
+}
+
+.btn-main {
+  background: #2563eb;
+  color: #fff !important;
+  border: none;
+  border-radius: 6px;
+  padding: 0.75rem 2rem;
+  font-weight: 600;
+  font-size: 1.1rem;
+  transition: background 0.2s;
+  box-shadow: 0 1px 4px rgba(37,99,235,0.08);
+}
+.btn-main:hover, .btn-main:focus {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+input[type="text"] {
+  border-radius: 6px;
+  border: 1px solid #c7d6ee;
+  padding: 0.75rem;
+  font-size: 1rem;
+}
+label {
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+h1, h2, h3 {
+  font-weight: 700;
+  letter-spacing: -1px;
+}
+.container {
+  max-width: 600px;
+  margin: 0 auto;
+}
+@media (max-width: 700px) {
+  .container { padding: 0 1rem; }
+}
+
+.welcome-section {
+  margin-top: 5rem;
+  text-align: center;
+}
+.welcome-card h1 {
+  font-size: 2.5rem;
+}
+.subtitle {
+  color: #3b82f6;
+  font-size: 1.2rem;
+  margin-bottom: 2rem;
+}
+
+.dev-banner {
+  background: #e0edff;
+  color: #1e40af;
+  padding: 1rem;
+  text-align: center;
+  font-weight: bold;
+  border-bottom: 2px solid #2563eb;
+  font-size: 1.1rem;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(37,99,235,0.07);
+}
+
+.login-section {
+  margin-top: 5rem;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.login-card h2 {
+  margin-bottom: 1.5rem;
+}
+
+.discussion-section h2 {
+  margin-bottom: 1.5rem;
+}
+
+.topic-card {
+  padding: 1.5rem 1.25rem;
+  border: 1px solid #e0e7ef;
+  background: #fff;
+}
+.topic-desc {
+  color: #3b82f6;
+}
+.topic-meta {
+  color: #60a5fa;
+}
+
+.message-card {
+  padding: 1rem 1.25rem;
+  border: 1px solid #e0e7ef;
+  margin-bottom: 1rem;
+}
+.message-content {
+  font-size: 1.08rem;
+}
+.message-meta {
+  color: #60a5fa;
+}
+
+.thread-message {
+  margin-top: 0.5rem;
+  padding: 0.9rem 1.25rem;
+  border-left: 3px solid #2563eb;
+  background: #f0f6ff;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(37,99,235,0.04);
+}
+.thread-content {
+  font-size: 1.05rem;
+}
+.thread-meta {
+  color: #2563eb;
+}
+
+.messages {
+  margin-top: 2rem;
+}
+.thread-replies {
+  margin-left: 2rem;
+  margin-top: 1rem;
+}

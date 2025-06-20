@@ -48,6 +48,17 @@ func Start(cfg *config.Config) {
 
 	mux := http.NewServeMux()
 
+	// Serve static assets with existence check
+	mux.HandleFunc("/assets/", func(w http.ResponseWriter, r *http.Request) {
+		assetPath := "." + r.URL.Path
+		if fi, err := http.Dir(".").Open(assetPath); err == nil {
+			fi.Close()
+			http.ServeFile(w, r, assetPath)
+		} else {
+			http.NotFound(w, r)
+		}
+	})
+
 	wellknownhandlers.RegisterRoutes(mux, "/.well-known", cfg)
 	authhandlers.RegisterRoutes(mux, "/auth", cfg)
 	healthhandlers.RegisterRoutes(mux, "/health", cfg)

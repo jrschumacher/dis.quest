@@ -10,7 +10,8 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import "github.com/jrschumacher/dis.quest/internal/config"
 
-func Page(appEnv string) templ.Component {
+// Modern, simple layout with improved spacing, card design, and subtle color accents
+func Page(appEnv string, content templ.Component) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -31,7 +32,7 @@ func Page(appEnv string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>dis.quest — Secure ATProtocol Discussions</title><link rel=\"stylesheet\" href=\"/assets/css/pico/pico.css\"><script src=\"/assets/js/htmx.2.0.4.js\"></script></head><body class=\"bg-gray-100\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>dis.quest — Secure ATProtocol Discussions</title><link rel=\"stylesheet\" href=\"/assets/css/pico/pico.css\"><link rel=\"stylesheet\" href=\"/assets/css/style.css\"><script type=\"module\" defer src=\"https://cdn.jsdelivr.net/gh/starfederation/datastar@develop/bundles/datastar.js\"></script></head><body>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -39,7 +40,17 @@ func Page(appEnv string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<main class=\"container\"><section style=\"margin-top: 4rem; text-align: center;\"><h1>Welcome to <span style=\"color: #f59e42;\">dis.quest</span></h1><p>A secure, decentralized discussion platform built on ATProtocol with optional OpenTDF encryption.</p><a href=\"/login\" class=\"contrast\">Login with Bluesky</a></section></main></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<main class=\"container\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if content != nil {
+			templ_7745c5c3_Err = content.Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</main></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -69,7 +80,7 @@ func DevBanner(appEnv string) templ.Component {
 		}
 		ctx = templ.ClearChildren(ctx)
 		if appEnv == config.EnvDev {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div style=\"background: #fffae6; color: #b45309; padding: 1rem; text-align: center; font-weight: bold; border-bottom: 2px solid #f59e42; font-size: 1.2rem;\">⚠️ DEVELOPMENT MODE — Not for production use! ⚠️</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"dev-banner\">⚠️ DEVELOPMENT MODE — Not for production use! ⚠️</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -99,7 +110,7 @@ func Login() templ.Component {
 			templ_7745c5c3_Var3 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<main class=\"container\"><section style=\"margin-top: 4rem; max-width: 400px; margin-left: auto; margin-right: auto;\"><h2>Login to dis.quest</h2><form method=\"get\" action=\"/auth/redirect\"><label for=\"handle\">Handle</label> <input type=\"text\" id=\"handle\" name=\"handle\" placeholder=\"your.handle.bsky.social\" required> <button type=\"submit\" class=\"contrast\" style=\"margin-top: 1rem;\">Continue</button></form></section></main>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<section class=\"login-section\"><div class=\"card login-card\"><h2 class=\"brand\" style=\"text-align:center; margin-bottom:2rem;\">Login to <span class=\"brand\">dis.quest</span></h2><form method=\"get\" action=\"/auth/redirect\" style=\"display:flex; flex-direction:column; gap:1.2rem;\"><label for=\"handle\">Handle</label> <input type=\"text\" id=\"handle\" name=\"handle\" placeholder=\"your.handle.bsky.social\" required> <button type=\"submit\" class=\"contrast btn-main\" style=\"width:100%;\">Continue</button></form></div></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -128,7 +139,7 @@ func Discussion() templ.Component {
 			templ_7745c5c3_Var4 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<main class=\"container\"><section style=\"margin-top: 2rem;\"><h2>Discussion Thread</h2><div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<section class=\"discussion-section\"><h2>Discussion Thread</h2><div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -136,7 +147,7 @@ func Discussion() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<!-- Multiple top-level messages --><div style=\"margin-top: 2rem;\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<!-- Multiple top-level messages --><div class=\"messages\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -152,7 +163,7 @@ func Discussion() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</div><!-- Threaded replies for one message --><div style=\"margin-left: 2rem; margin-top: 1rem;\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</div><!-- Threaded replies for one message --><div class=\"thread-replies\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -161,10 +172,6 @@ func Discussion() templ.Component {
 			return templ_7745c5c3_Err
 		}
 		templ_7745c5c3_Err = ThreadMessage("@frank", "2025-05-26", "Replying to @carol: I disagree.").Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<!-- Simulate a long thread -->")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -184,7 +191,7 @@ func Discussion() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div><!-- Simulate many top-level messages --><div style=\"margin-top: 2rem;\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div><!-- Simulate many top-level messages --><div class=\"messages\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -216,7 +223,7 @@ func Discussion() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div></div></section></main>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div></div></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -245,7 +252,7 @@ func Topic() templ.Component {
 			templ_7745c5c3_Var5 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<article style=\"padding: 1rem; border: 1px solid #eee; border-radius: 8px; background: #fff;\"><h3>Sample Topic Title</h3><p>This is the start of a discussion topic. Here you can describe the subject and context.</p><small>by @alice • 2025-05-26</small></article>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<article class=\"card topic-card\"><h3>Sample Topic Title</h3><p class=\"topic-desc\">This is the start of a discussion topic. Here you can describe the subject and context.</p><small class=\"topic-meta\">by @alice • 2025-05-26</small></article>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -274,27 +281,27 @@ func Message(author string, date string, content string) templ.Component {
 			templ_7745c5c3_Var6 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<article style=\"padding: 0.75rem; border: 1px solid #eee; border-radius: 8px; background: #fff; margin-bottom: 0.5rem;\"><p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<article class=\"card message-card\"><p class=\"message-content\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(content)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 95, Col: 13}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 92, Col: 37}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</p><small>by ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</p><small class=\"message-meta\">by ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(author)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 96, Col: 19}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 93, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
@@ -307,7 +314,7 @@ func Message(author string, date string, content string) templ.Component {
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(date)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 96, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 93, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
@@ -342,27 +349,27 @@ func ThreadMessage(author string, date string, content string) templ.Component {
 			templ_7745c5c3_Var10 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<article style=\"margin-top: 0.5rem; padding: 0.75rem; border-left: 3px solid #f59e42; background: #f9f9f9; border-radius: 6px;\"><p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<article class=\"thread-message\"><p class=\"thread-content\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(content)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 102, Col: 13}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 99, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</p><small>by ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</p><small class=\"thread-meta\">by ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var12 string
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(author)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 103, Col: 19}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 100, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
@@ -375,7 +382,7 @@ func ThreadMessage(author string, date string, content string) templ.Component {
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(date)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 103, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/components.templ`, Line: 100, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {

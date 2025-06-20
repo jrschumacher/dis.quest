@@ -2,23 +2,23 @@ package components
 
 import "github.com/jrschumacher/dis.quest/internal/config"
 
-templ Page(appEnv string) {
+// Modern, simple layout with improved spacing, card design, and subtle color accents
+templ Page(appEnv string, content templ.Component) {
 	<html>
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<title>dis.quest — Secure ATProtocol Discussions</title>
 			<link rel="stylesheet" href="/assets/css/pico/pico.css"/>
-			<script src="/assets/js/htmx.2.0.4.js"></script>
+      <link rel="stylesheet" href="/assets/css/style.css"/>
+      <script type="module" defer src="https://cdn.jsdelivr.net/gh/starfederation/datastar@develop/bundles/datastar.js"></script>
 		</head>
-		<body class="bg-gray-100">
+		<body>
 			@DevBanner(appEnv)
 			<main class="container">
-				<section style="margin-top: 4rem; text-align: center;">
-					<h1>Welcome to <span style="color: #f59e42;">dis.quest</span></h1>
-					<p>A secure, decentralized discussion platform built on ATProtocol with optional OpenTDF encryption.</p>
-					<a href="/login" class="contrast">Login with Bluesky</a>
-				</section>
+				if content != nil {
+					@content
+				}
 			</main>
 		</body>
 	</html>
@@ -26,80 +26,77 @@ templ Page(appEnv string) {
 
 templ DevBanner(appEnv string) {
 	if appEnv == config.EnvDev {
-		<div style="background: #fffae6; color: #b45309; padding: 1rem; text-align: center; font-weight: bold; border-bottom: 2px solid #f59e42; font-size: 1.2rem;">
+		<div class="dev-banner">
 			⚠️ DEVELOPMENT MODE — Not for production use! ⚠️
 		</div>
 	}
 }
 
 templ Login() {
-	<main class="container">
-		<section style="margin-top: 4rem; max-width: 400px; margin-left: auto; margin-right: auto;">
-			<h2>Login to dis.quest</h2>
-			<form method="get" action="/auth/redirect">
+	<section class="login-section">
+		<div class="card login-card">
+			<h2 class="brand" style="text-align:center; margin-bottom:2rem;">Login to <span class="brand">dis.quest</span></h2>
+			<form method="get" action="/auth/redirect" style="display:flex; flex-direction:column; gap:1.2rem;">
 				<label for="handle">Handle</label>
 				<input type="text" id="handle" name="handle" placeholder="your.handle.bsky.social" required />
-				<button type="submit" class="contrast" style="margin-top: 1rem;">Continue</button>
+				<button type="submit" class="contrast btn-main" style="width:100%;">Continue</button>
 			</form>
-		</section>
-	</main>
+		</div>
+	</section>
 }
 
 templ Discussion() {
-	<main class="container">
-		<section style="margin-top: 2rem;">
-			<h2>Discussion Thread</h2>
-			<div>
-				@Topic()
-				<!-- Multiple top-level messages -->
-				<div style="margin-top: 2rem;">
-					@Message("@bob", "2025-05-26", "I agree with the topic and would like to add...")
-					@Message("@carol", "2025-05-26", "Here's another perspective on this topic.")
-					@Message("@dave", "2025-05-26", "What about edge cases?")
-				</div>
-				<!-- Threaded replies for one message -->
-				<div style="margin-left: 2rem; margin-top: 1rem;">
-					@ThreadMessage("@eve", "2025-05-26", "Replying to @bob: Good point!")
-					@ThreadMessage("@frank", "2025-05-26", "Replying to @carol: I disagree.")
-					<!-- Simulate a long thread -->
-					@ThreadMessage("@grace", "2025-05-26", "Another reply in a long thread...")
-					@ThreadMessage("@heidi", "2025-05-26", "Yet another reply...")
-					@ThreadMessage("@ivan", "2025-05-26", "This thread is getting long!")
-					@ThreadMessage("@judy", "2025-05-26", "Adding my thoughts to the long thread.")
-				</div>
-				<!-- Simulate many top-level messages -->
-				<div style="margin-top: 2rem;">
-					@Message("@kate", "2025-05-26", "Top-level message 4")
-					@Message("@leo", "2025-05-26", "Top-level message 5")
-					@Message("@mallory", "2025-05-26", "Top-level message 6")
-					@Message("@nick", "2025-05-26", "Top-level message 7")
-					@Message("@olivia", "2025-05-26", "Top-level message 8")
-					@Message("@peggy", "2025-05-26", "Top-level message 9")
-					@Message("@quinn", "2025-05-26", "Top-level message 10")
-				</div>
+	<section class="discussion-section">
+		<h2>Discussion Thread</h2>
+		<div>
+			@Topic()
+			<!-- Multiple top-level messages -->
+			<div class="messages">
+				@Message("@bob", "2025-05-26", "I agree with the topic and would like to add...")
+				@Message("@carol", "2025-05-26", "Here's another perspective on this topic.")
+				@Message("@dave", "2025-05-26", "What about edge cases?")
 			</div>
-		</section>
-	</main>
+			<!-- Threaded replies for one message -->
+			<div class="thread-replies">
+				@ThreadMessage("@eve", "2025-05-26", "Replying to @bob: Good point!")
+				@ThreadMessage("@frank", "2025-05-26", "Replying to @carol: I disagree.")
+				@ThreadMessage("@grace", "2025-05-26", "Another reply in a long thread...")
+				@ThreadMessage("@heidi", "2025-05-26", "Yet another reply...")
+				@ThreadMessage("@ivan", "2025-05-26", "This thread is getting long!")
+				@ThreadMessage("@judy", "2025-05-26", "Adding my thoughts to the long thread.")
+			</div>
+			<!-- Simulate many top-level messages -->
+			<div class="messages">
+				@Message("@kate", "2025-05-26", "Top-level message 4")
+				@Message("@leo", "2025-05-26", "Top-level message 5")
+				@Message("@mallory", "2025-05-26", "Top-level message 6")
+				@Message("@nick", "2025-05-26", "Top-level message 7")
+				@Message("@olivia", "2025-05-26", "Top-level message 8")
+				@Message("@peggy", "2025-05-26", "Top-level message 9")
+				@Message("@quinn", "2025-05-26", "Top-level message 10")
+			</div>
+		</div>
+	</section>
 }
 
 templ Topic() {
-	<article style="padding: 1rem; border: 1px solid #eee; border-radius: 8px; background: #fff;">
+	<article class="card topic-card">
 		<h3>Sample Topic Title</h3>
-		<p>This is the start of a discussion topic. Here you can describe the subject and context.</p>
-		<small>by @alice • 2025-05-26</small>
+		<p class="topic-desc">This is the start of a discussion topic. Here you can describe the subject and context.</p>
+		<small class="topic-meta">by @alice • 2025-05-26</small>
 	</article>
 }
 
 templ Message(author string, date string, content string) {
-	<article style="padding: 0.75rem; border: 1px solid #eee; border-radius: 8px; background: #fff; margin-bottom: 0.5rem;">
-		<p>{content}</p>
-		<small>by {author} • {date}</small>
+	<article class="card message-card">
+		<p class="message-content">{content}</p>
+		<small class="message-meta">by {author} • {date}</small>
 	</article>
 }
 
 templ ThreadMessage(author string, date string, content string) {
-	<article style="margin-top: 0.5rem; padding: 0.75rem; border-left: 3px solid #f59e42; background: #f9f9f9; border-radius: 6px;">
-		<p>{content}</p>
-		<small>by {author} • {date}</small>
+	<article class="thread-message">
+		<p class="thread-content">{content}</p>
+		<small class="thread-meta">by {author} • {date}</small>
 	</article>
 }

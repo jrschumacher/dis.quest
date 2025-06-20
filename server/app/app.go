@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/a-h/templ"
 	"github.com/jrschumacher/dis.quest/components"
 	"github.com/jrschumacher/dis.quest/internal/config"
 	"github.com/jrschumacher/dis.quest/internal/db"
@@ -33,35 +32,71 @@ func RegisterRoutes(mux *http.ServeMux, _ string, cfg *config.Config, dbService 
 		dbService: dbService,
 	}
 
+	renderMiddleware := middleware.PageWrapper(cfg.AppEnv)
+
 	// Public routes
-	mux.Handle("/", templ.Handler(components.Page(cfg.AppEnv)))
-	mux.Handle("/login", templ.Handler(components.Login()))
-	
-	// Protected routes with clean middleware chains
-	mux.Handle("/discussion", 
-		middleware.WithProtectionFunc(router.DiscussionHandler))
-	
-	mux.Handle("/topics", 
-		middleware.WithUserContextFunc(router.TopicsHandler))
-	
+	mux.Handle("/",
+		middleware.ApplyFunc(router.LandingHandler,
+			renderMiddleware,
+		),
+	)
+	mux.Handle("/login",
+		middleware.ApplyFunc(router.LoginHandler,
+			renderMiddleware,
+		),
+	)
+
+	// Protected routes with explicit middleware options
+	mux.Handle("/discussion",
+		middleware.ApplyFunc(router.DiscussionHandler,
+			middleware.AuthMiddleware,
+			middleware.UserContextMiddleware,
+			middleware.RequireUserContext,
+			renderMiddleware,
+		),
+	)
+
+	mux.Handle("/topics",
+		middleware.ApplyFunc(router.TopicsHandler,
+			middleware.UserContextMiddleware,
+			renderMiddleware,
+		),
+	)
+
 	// API routes with custom middleware chains
-	mux.Handle("/api/topics", 
-		middleware.WithMiddleware(
+	mux.Handle("/api/topics",
+		middleware.ApplyFunc(router.TopicsAPIHandler,
 			middleware.UserContextMiddleware,
-		).ThenFunc(router.TopicsAPIHandler))
-	
-	mux.Handle("/api/topics/{id}/messages", 
-		middleware.WithMiddleware(
+		),
+	)
+
+	mux.Handle("/api/topics/{id}/messages",
+		middleware.ApplyFunc(router.MessagesAPIHandler,
 			middleware.UserContextMiddleware,
-		).ThenFunc(router.MessagesAPIHandler))
+		),
+	)
+
+	// // SSE endpoint for datastar real-time updates
+	// mux.HandleFunc("/stream", router.TopicsStreamHandler)
 
 	return router
+}
+
+// LandingHandler renders the landing page
+func (r *Router) LandingHandler(w http.ResponseWriter, req *http.Request) {
+	// You can replace this with a custom landing component if desired
+	w.WriteHeader(http.StatusOK)
+}
+
+// LoginHandler renders the login page
+func (r *Router) LoginHandler(w http.ResponseWriter, req *http.Request) {
+	_ = components.Login().Render(req.Context(), w)
 }
 
 // DiscussionHandler shows the discussion page with real data
 func (r *Router) DiscussionHandler(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
-	
+
 	// Get topics from database
 	_, err := r.dbService.Queries().ListTopics(ctx, db.ListTopicsParams{
 		Limit:  10,
@@ -72,7 +107,7 @@ func (r *Router) DiscussionHandler(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Failed to load discussions", http.StatusInternalServerError)
 		return
 	}
-	
+
 	// Render discussion component with real data
 	// TODO: Pass topics data to component once we update the component interface
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -86,7 +121,7 @@ func (r *Router) DiscussionHandler(w http.ResponseWriter, req *http.Request) {
 // TopicsHandler shows the topics listing page
 func (r *Router) TopicsHandler(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
-	
+
 	// Get topics from database
 	topics, err := r.dbService.Queries().ListTopics(ctx, db.ListTopicsParams{
 		Limit:  20,
@@ -97,7 +132,7 @@ func (r *Router) TopicsHandler(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Failed to load topics", http.StatusInternalServerError)
 		return
 	}
-	
+
 	// For now, return JSON (later we'll create a proper template)
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(topics); err != nil {
@@ -119,27 +154,27 @@ func (r *Router) TopicsAPIHandler(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) listTopicsAPI(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
-	
+
 	// Parse pagination parameters
 	limitStr := req.URL.Query().Get("limit")
 	offsetStr := req.URL.Query().Get("offset")
-	
+
 	limit := int64(20) // default
 	if limitStr != "" {
 		if l, err := strconv.ParseInt(limitStr, 10, 64); err == nil && l > 0 && l <= 100 {
 			limit = l
 		}
 	}
-	
+
 	offset := int64(0) // default
 	if offsetStr != "" {
 		if o, err := strconv.ParseInt(offsetStr, 10, 64); err == nil && o >= 0 {
 			offset = o
 		}
 	}
-	
+
 	topics, err := r.dbService.Queries().ListTopics(ctx, db.ListTopicsParams{
-		Limit:  func() int32 {
+		Limit: func() int32 {
 			if limit < 0 || limit > 2147483647 {
 				return 2147483647
 			}
@@ -157,7 +192,7 @@ func (r *Router) listTopicsAPI(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Failed to fetch topics", http.StatusInternalServerError)
 		return
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(topics); err != nil {
 		logger.Error("Failed to encode topics", "error", err)
@@ -166,33 +201,33 @@ func (r *Router) listTopicsAPI(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) createTopicAPI(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
-	
+
 	// Get user context
 	userCtx, ok := middleware.GetUserContext(req)
 	if !ok {
 		httputil.WriteError(w, http.StatusUnauthorized, "Authentication required")
 		return
 	}
-	
+
 	// Parse request body
 	var createReq struct {
 		Subject        string `json:"subject"`
 		InitialMessage string `json:"initial_message"`
 		Category       string `json:"category,omitempty"`
 	}
-	
+
 	if err := json.NewDecoder(req.Body).Decode(&createReq); err != nil {
 		httputil.WriteError(w, http.StatusBadRequest, "Invalid JSON in request body")
 		return
 	}
-	
+
 	// Validate input
 	validator := validation.TopicValidation{
 		Subject:        createReq.Subject,
 		InitialMessage: createReq.InitialMessage,
 		Category:       createReq.Category,
 	}
-	
+
 	if err := validator.Validate(); err != nil {
 		if validationErrors, ok := err.(validation.Errors); ok {
 			httputil.WriteValidationError(w, validationErrors)
@@ -201,10 +236,10 @@ func (r *Router) createTopicAPI(w http.ResponseWriter, req *http.Request) {
 		}
 		return
 	}
-	
+
 	// Generate a simple rkey (timestamp-based for now)
 	rkey := fmt.Sprintf("topic-%d", time.Now().UnixNano())
-	
+
 	// Create topic with automatic participation using transaction
 	now := time.Now()
 	result, err := r.dbService.CreateTopicWithParticipation(ctx, db.CreateTopicWithParticipationParams{
@@ -220,7 +255,7 @@ func (r *Router) createTopicAPI(w http.ResponseWriter, req *http.Request) {
 		httputil.WriteInternalError(w, err, "Failed to create topic", "did", userCtx.DID)
 		return
 	}
-	
+
 	httputil.WriteCreated(w, result.Topic)
 }
 
@@ -232,7 +267,7 @@ func (r *Router) MessagesAPIHandler(w http.ResponseWriter, req *http.Request) {
 	if idx := len(topicID) - len("/messages"); idx > 0 && topicID[idx:] == "/messages" {
 		topicID = topicID[:idx]
 	}
-	
+
 	switch req.Method {
 	case http.MethodGet:
 		r.listMessagesAPI(w, req, topicID)
@@ -245,7 +280,7 @@ func (r *Router) MessagesAPIHandler(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) listMessagesAPI(w http.ResponseWriter, req *http.Request, topicID string) {
 	ctx := req.Context()
-	
+
 	// For now, assume topicID format is "did:rkey"
 	// TODO: Implement proper topic ID parsing
 	parts := []string{topicID, topicID} // placeholder
@@ -253,7 +288,7 @@ func (r *Router) listMessagesAPI(w http.ResponseWriter, req *http.Request, topic
 		http.Error(w, "Invalid topic ID format", http.StatusBadRequest)
 		return
 	}
-	
+
 	messages, err := r.dbService.Queries().GetMessagesByTopic(ctx, db.GetMessagesByTopicParams{
 		TopicDid:  parts[0],
 		TopicRkey: parts[1],
@@ -263,7 +298,7 @@ func (r *Router) listMessagesAPI(w http.ResponseWriter, req *http.Request, topic
 		http.Error(w, "Failed to fetch messages", http.StatusInternalServerError)
 		return
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(messages); err != nil {
 		logger.Error("Failed to encode messages", "error", err)
@@ -272,31 +307,31 @@ func (r *Router) listMessagesAPI(w http.ResponseWriter, req *http.Request, topic
 
 func (r *Router) createMessageAPI(w http.ResponseWriter, req *http.Request, topicID string) {
 	ctx := req.Context()
-	
+
 	// Get user context
 	userCtx, ok := middleware.GetUserContext(req)
 	if !ok {
 		httputil.WriteError(w, http.StatusUnauthorized, "Authentication required")
 		return
 	}
-	
+
 	// Parse request body
 	var createReq struct {
 		Content           string `json:"content"`
 		ParentMessageRkey string `json:"parent_message_rkey,omitempty"`
 	}
-	
+
 	if err := json.NewDecoder(req.Body).Decode(&createReq); err != nil {
 		httputil.WriteError(w, http.StatusBadRequest, "Invalid JSON in request body")
 		return
 	}
-	
+
 	// Validate input
 	validator := validation.MessageValidation{
 		Content:           createReq.Content,
 		ParentMessageRkey: createReq.ParentMessageRkey,
 	}
-	
+
 	if err := validator.Validate(); err != nil {
 		if validationErrors, ok := err.(validation.Errors); ok {
 			httputil.WriteValidationError(w, validationErrors)
@@ -305,7 +340,7 @@ func (r *Router) createMessageAPI(w http.ResponseWriter, req *http.Request, topi
 		}
 		return
 	}
-	
+
 	// For now, assume topicID format is "did:rkey"
 	// TODO: Implement proper topic ID parsing
 	parts := []string{topicID, topicID} // placeholder
@@ -313,10 +348,10 @@ func (r *Router) createMessageAPI(w http.ResponseWriter, req *http.Request, topi
 		httputil.WriteError(w, http.StatusBadRequest, "Invalid topic ID format")
 		return
 	}
-	
+
 	// Generate a simple rkey for the message
 	rkey := fmt.Sprintf("msg-%d", time.Now().UnixNano())
-	
+
 	// Create message
 	now := time.Now()
 	message, err := r.dbService.Queries().CreateMessage(ctx, db.CreateMessageParams{
@@ -333,6 +368,36 @@ func (r *Router) createMessageAPI(w http.ResponseWriter, req *http.Request, topi
 		httputil.WriteInternalError(w, err, "Failed to create message", "did", userCtx.DID, "topicID", topicID)
 		return
 	}
-	
+
 	httputil.WriteCreated(w, message)
 }
+
+// TopicsStreamHandler streams the latest topics as HTML fragments for datastar
+// func (r *Router) TopicsStreamHandler(w http.ResponseWriter, req *http.Request) {
+// 	sse := datastar.NewSSE(w, req)
+// 	ticker := time.NewTicker(1 * time.Second)
+// 	defer ticker.Stop()
+// 	ctx := req.Context()
+
+// 	for {
+// 		select {
+// 		case <-ctx.Done():
+// 			return
+// 		case <-ticker.C:
+// 			topics, err := r.dbService.Queries().ListTopics(ctx, db.ListTopicsParams{
+// 				Limit:  10,
+// 				Offset: 0,
+// 			})
+// 			if err != nil {
+// 				continue // skip this tick on error
+// 			}
+// 			// Render topics as HTML fragment (simple list)
+// 			html := "<ul>"
+// 			for _, t := range topics {
+// 				html += fmt.Sprintf("<li>%s</li>", t.Subject)
+// 			}
+// 			html += "</ul>"
+// 			sse.MergeFragments(html)
+// 		}
+// 	}
+// }
