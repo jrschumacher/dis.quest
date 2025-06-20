@@ -123,7 +123,53 @@ server/
 - **Database**: SQLC for type-safe SQL queries
 - **HTML Views**: Templ for server-side rendering
 - **Styling**: Pico CSS (avoid React or heavy JavaScript frameworks)
+- **Interactivity**: Datastar for reactive UI components
 - **Logging**: Use `internal/logger` for all logging needs
+
+### Datastar Integration
+
+#### Version and Setup
+- **Current Version**: v1.0.0-beta.11 (Go SDK and JavaScript CDN)
+- **CDN**: `https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0-beta.11/bundles/datastar.js`
+- **Go Import**: `github.com/starfederation/datastar/sdk/go`
+
+#### Key Documentation Resources
+- **Examples Repository**: https://github.com/starfederation/datastar/tree/main/site
+- **Reference Guide**: https://data-star.dev/reference/overview#attribute-plugins
+- **Best Practices**: Study the bulk update and edit row examples for component isolation patterns
+
+#### Critical Datastar Patterns
+
+##### Signal Isolation for Multiple Components
+**Problem**: Datastar signals are globally scoped by default. Multiple components with the same signal names will interfere with each other.
+
+**Solution**: Use unique signal names with component IDs:
+```go
+// In Go handler - build unique signal state
+initialSignals := make(map[string]any)
+for _, msg := range messages {
+    initialSignals["liked_"+msg.Id] = msg.Liked
+}
+
+// In templ component - use unique signal names
+data-on-click={ "$liked_" + signals.Id + " = !$liked_" + signals.Id + "; @post(`/api/messages/" + signals.Id + "/like`)" }
+data-show={ "$liked_" + signals.Id }
+```
+
+##### Correct Method Syntax
+- **Correct**: `@post`, `@get`, `@patch`, `@delete` 
+- **Incorrect**: `$$post`, `$$get` (old syntax)
+- **Example**: `@post(\`/api/messages/${$messageId}/like\`)`
+
+##### Component State Management
+- Use `data-signals` on parent container to initialize global state
+- Use `data-bind` for two-way data binding on form elements
+- Use `data-show` and `data-hide` for conditional rendering
+- Use `data-on-click`, `data-on-change` for event handling
+
+##### Template Literal Interpolation
+- Use backticks for dynamic URLs: `@post(\`/api/messages/${$id}/like\`)`
+- Avoid string concatenation in datastar expressions when possible
 
 ## Configuration
 
