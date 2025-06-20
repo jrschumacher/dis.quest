@@ -136,6 +136,7 @@ func (rt *Router) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 	url := conf.AuthCodeURL(state,
 		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
 		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
+		oauth2.SetAuthURLParam("login_hint", handle),
 	)
 	http.Redirect(w, r, url, http.StatusFound)
 }

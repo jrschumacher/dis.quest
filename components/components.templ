@@ -11,7 +11,7 @@ templ Page(appEnv string, content templ.Component) {
 			<title>dis.quest — Secure ATProtocol Discussions</title>
 			<link rel="stylesheet" href="/assets/css/pico/pico.css"/>
       <link rel="stylesheet" href="/assets/css/style.css"/>
-      <script type="module" defer src="https://cdn.jsdelivr.net/gh/starfederation/datastar@develop/bundles/datastar.js"></script>
+      <script type="module" defer src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0-beta.11/bundles/datastar.js"></script>
 		</head>
 		<body>
 			@DevBanner(appEnv)
@@ -39,41 +39,36 @@ templ Login() {
 			<form method="get" action="/auth/redirect" style="display:flex; flex-direction:column; gap:1.2rem;">
 				<label for="handle">Handle</label>
 				<input type="text" id="handle" name="handle" placeholder="your.handle.bsky.social" required />
-				<button type="submit" class="contrast btn-main" style="width:100%;">Continue</button>
+				<button type="submit" class="contrast btn-main" style="width:100%;">
+					<span>Continue</span>
+				</button>
 			</form>
 		</div>
 	</section>
 }
 
-templ Discussion() {
-	<section class="discussion-section">
+type DiscussionSignals struct {
+  TopicId string `json:"topicId"`
+  Messages []MessageSignals `json:"messages"`
+  InitialSignals map[string]any `json:"-"`
+}
+
+templ Discussion(signals DiscussionSignals) {
+	<section class="discussion-section" data-signals={ templ.JSONString(signals.InitialSignals) }>
 		<h2>Discussion Thread</h2>
 		<div>
 			@Topic()
 			<!-- Multiple top-level messages -->
 			<div class="messages">
-				@Message("@bob", "2025-05-26", "I agree with the topic and would like to add...")
-				@Message("@carol", "2025-05-26", "Here's another perspective on this topic.")
-				@Message("@dave", "2025-05-26", "What about edge cases?")
-			</div>
-			<!-- Threaded replies for one message -->
-			<div class="thread-replies">
-				@ThreadMessage("@eve", "2025-05-26", "Replying to @bob: Good point!")
-				@ThreadMessage("@frank", "2025-05-26", "Replying to @carol: I disagree.")
-				@ThreadMessage("@grace", "2025-05-26", "Another reply in a long thread...")
-				@ThreadMessage("@heidi", "2025-05-26", "Yet another reply...")
-				@ThreadMessage("@ivan", "2025-05-26", "This thread is getting long!")
-				@ThreadMessage("@judy", "2025-05-26", "Adding my thoughts to the long thread.")
-			</div>
-			<!-- Simulate many top-level messages -->
-			<div class="messages">
-				@Message("@kate", "2025-05-26", "Top-level message 4")
-				@Message("@leo", "2025-05-26", "Top-level message 5")
-				@Message("@mallory", "2025-05-26", "Top-level message 6")
-				@Message("@nick", "2025-05-26", "Top-level message 7")
-				@Message("@olivia", "2025-05-26", "Top-level message 8")
-				@Message("@peggy", "2025-05-26", "Top-level message 9")
-				@Message("@quinn", "2025-05-26", "Top-level message 10")
+				for _, message := range signals.Messages {
+					@Message(message)
+					<div class="thread">
+						<!-- Nested threaded replies -->
+						for _, reply := range message.ThreadedReplies {
+							@ThreadMessage(reply)
+						}
+					</div>
+				}
 			</div>
 		</div>
 	</section>
@@ -87,16 +82,34 @@ templ Topic() {
 	</article>
 }
 
-templ Message(author string, date string, content string) {
-	<article class="card message-card">
-		<p class="message-content">{content}</p>
-		<small class="message-meta">by {author} • {date}</small>
+type MessageSignals struct {
+  Id     string `json:"id"`
+  Author string `json:"author"`
+  Date   string `json:"date"`
+  Content string  `json:"content"`
+  Liked  bool    `json:"liked"`
+
+  ThreadedReplies []MessageSignals `json:"threadedReplies"`
+}
+
+templ Message(signals MessageSignals) {
+	<article id={ "message-" + signals.Id } class="card message-card">
+		<p class="message-content">{signals.Content}</p>
+		<small class="message-meta">by {signals.Author} • {signals.Date}</small>
+		<div class="message-actions" style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+			<button class="outline" style="font-size: 0.8rem; padding: 0.25rem 0.5rem;"
+					data-bind={ "liked_" + signals.Id }
+					data-on-click={ "$liked_" + signals.Id + " = !$liked_" + signals.Id + "; @post(`/api/messages/" + signals.Id + "/like`)" }>
+				<span data-show={ "!$liked_" + signals.Id }>👍 Like</span>
+				<span data-show={ "$liked_" + signals.Id }>👍 Liked</span>
+			</button>
+		</div>
 	</article>
 }
 
-templ ThreadMessage(author string, date string, content string) {
+templ ThreadMessage(signals MessageSignals) {
 	<article class="thread-message">
-		<p class="thread-content">{content}</p>
-		<small class="thread-meta">by {author} • {date}</small>
+		<p class="thread-content">{signals.Content}</p>
+		<small class="thread-meta">by {signals.Author} • {signals.Date}</small>
 	</article>
 }

@@ -131,7 +131,7 @@ func PageWrapper(appEnv string) func(http.Handler) http.Handler {
 			rw := httptest.NewRecorder()
 			next.ServeHTTP(rw, r)
 
-			content := templ.ComponentFunc(func(ctx context.Context, wtr io.Writer) error {
+			content := templ.ComponentFunc(func(_ context.Context, wtr io.Writer) error {
 				_, err := wtr.Write(rw.Body.Bytes())
 				return err
 			})

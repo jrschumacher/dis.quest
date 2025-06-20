@@ -23,7 +23,7 @@ const (
 	contentTypeOptions    = "nosniff"
 	frameOptions          = "DENY"
 	xssProtection         = "1; mode=block"
-	contentSecurityPolicy = "default-src 'self'"
+	contentSecurityPolicy = "default-src 'self'; script-src 'self' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'"
 	referrerPolicy        = "strict-origin-when-cross-origin"
 )
 
@@ -52,7 +52,9 @@ func Start(cfg *config.Config) {
 	mux.HandleFunc("/assets/", func(w http.ResponseWriter, r *http.Request) {
 		assetPath := "." + r.URL.Path
 		if fi, err := http.Dir(".").Open(assetPath); err == nil {
-			fi.Close()
+			if closeErr := fi.Close(); closeErr != nil {
+				logger.Error("failed to close file", "error", closeErr)
+			}
 			http.ServeFile(w, r, assetPath)
 		} else {
 			http.NotFound(w, r)

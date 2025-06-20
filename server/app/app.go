@@ -2,6 +2,7 @@
 package app
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/middleware"
 	"github.com/jrschumacher/dis.quest/internal/svrlib"
 	"github.com/jrschumacher/dis.quest/internal/validation"
+	datastar "github.com/starfederation/datastar/sdk/go"
 )
 
 // Router handles application-specific HTTP routes
@@ -76,14 +78,27 @@ func RegisterRoutes(mux *http.ServeMux, _ string, cfg *config.Config, dbService 
 		),
 	)
 
-	// // SSE endpoint for datastar real-time updates
-	// mux.HandleFunc("/stream", router.TopicsStreamHandler)
+	// Datastar API endpoints
+	mux.Handle("/api/messages/{id}/like",
+		middleware.ApplyFunc(router.LikeMessageHandler,
+			middleware.UserContextMiddleware,
+		),
+	)
+
+	mux.Handle("/api/messages/reply",
+		middleware.ApplyFunc(router.ReplyMessageHandler,
+			middleware.UserContextMiddleware,
+		),
+	)
+
+	// SSE endpoint for datastar real-time updates
+	mux.HandleFunc("/stream/topics", router.TopicsStreamHandler)
 
 	return router
 }
 
 // LandingHandler renders the landing page
-func (r *Router) LandingHandler(w http.ResponseWriter, req *http.Request) {
+func (r *Router) LandingHandler(w http.ResponseWriter, _ *http.Request) {
 	// You can replace this with a custom landing component if desired
 	w.WriteHeader(http.StatusOK)
 }
@@ -93,25 +108,71 @@ func (r *Router) LoginHandler(w http.ResponseWriter, req *http.Request) {
 	_ = components.Login().Render(req.Context(), w)
 }
 
-// DiscussionHandler shows the discussion page with real data
+// DiscussionHandler shows the discussion page with mock data
 func (r *Router) DiscussionHandler(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	// Get topics from database
-	_, err := r.dbService.Queries().ListTopics(ctx, db.ListTopicsParams{
-		Limit:  10,
-		Offset: 0,
-	})
-	if err != nil {
-		logger.Error("Failed to fetch topics", "error", err)
-		http.Error(w, "Failed to load discussions", http.StatusInternalServerError)
-		return
+	// Create mock data matching the new component structure
+	messages := []components.MessageSignals{
+		{
+			Id:      "msg-1",
+			Author:  "@bob",
+			Date:    "2025-05-26",
+			Content: "I agree with the topic and would like to add...",
+			Liked:   false,
+			ThreadedReplies: []components.MessageSignals{
+				{
+					Id:      "msg-1-reply-1",
+					Author:  "@eve",
+					Date:    "2025-05-26",
+					Content: "Replying to @bob: Good point!",
+					Liked:   false,
+				},
+			},
+		},
+		{
+			Id:      "msg-2",
+			Author:  "@carol",
+			Date:    "2025-05-26",
+			Content: "Here's another perspective on this topic.",
+			Liked:   false,
+			ThreadedReplies: []components.MessageSignals{
+				{
+					Id:      "msg-2-reply-1",
+					Author:  "@frank",
+					Date:    "2025-05-26",
+					Content: "Replying to @carol: I disagree.",
+					Liked:   false,
+				},
+			},
+		},
+		{
+			Id:      "msg-3",
+			Author:  "@dave",
+			Date:    "2025-05-26",
+			Content: "What about edge cases?",
+			Liked:   false,
+		},
 	}
 
-	// Render discussion component with real data
-	// TODO: Pass topics data to component once we update the component interface
+	// Build initial signal state for datastar
+	initialSignals := make(map[string]any)
+	for _, msg := range messages {
+		initialSignals["liked_"+msg.Id] = msg.Liked
+		for _, reply := range msg.ThreadedReplies {
+			initialSignals["liked_"+reply.Id] = reply.Liked
+		}
+	}
+
+	signals := components.DiscussionSignals{
+		TopicId:        "topic-1",
+		Messages:       messages,
+		InitialSignals: initialSignals,
+	}
+
+	// Render discussion component with mock data
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	component := components.Discussion()
+	component := components.Discussion(signals)
 	if err := component.Render(ctx, w); err != nil {
 		logger.Error("Failed to render discussion page", "error", err)
 		http.Error(w, "Failed to render page", http.StatusInternalServerError)
@@ -372,32 +433,129 @@ func (r *Router) createMessageAPI(w http.ResponseWriter, req *http.Request, topi
 	httputil.WriteCreated(w, message)
 }
 
-// TopicsStreamHandler streams the latest topics as HTML fragments for datastar
-// func (r *Router) TopicsStreamHandler(w http.ResponseWriter, req *http.Request) {
-// 	sse := datastar.NewSSE(w, req)
-// 	ticker := time.NewTicker(1 * time.Second)
-// 	defer ticker.Stop()
-// 	ctx := req.Context()
+// LikeMessageHandler handles liking/unliking messages
+func (r *Router) LikeMessageHandler(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
-// 	for {
-// 		select {
-// 		case <-ctx.Done():
-// 			return
-// 		case <-ticker.C:
-// 			topics, err := r.dbService.Queries().ListTopics(ctx, db.ListTopicsParams{
-// 				Limit:  10,
-// 				Offset: 0,
-// 			})
-// 			if err != nil {
-// 				continue // skip this tick on error
-// 			}
-// 			// Render topics as HTML fragment (simple list)
-// 			html := "<ul>"
-// 			for _, t := range topics {
-// 				html += fmt.Sprintf("<li>%s</li>", t.Subject)
-// 			}
-// 			html += "</ul>"
-// 			sse.MergeFragments(html)
-// 		}
-// 	}
-// }
+	// Extract message ID from URL path
+	messageID := req.PathValue("id")
+	if messageID == "" {
+		http.Error(w, "Message ID required", http.StatusBadRequest)
+		return
+	}
+
+	logger.Info("Like toggled", "messageID", messageID)
+
+	// For datastar, we just need to return success - the client handles the state
+	w.WriteHeader(http.StatusOK)
+}
+
+// ReplyMessageHandler handles posting replies to messages
+func (r *Router) ReplyMessageHandler(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get user context
+	userCtx, ok := middleware.GetUserContext(req)
+	if !ok {
+		httputil.WriteError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	// Parse form data from Datastar
+	if err := req.ParseForm(); err != nil {
+		httputil.WriteError(w, http.StatusBadRequest, "Invalid form data")
+		return
+	}
+
+	content := req.FormValue("reply_content")
+	if content == "" {
+		httputil.WriteError(w, http.StatusBadRequest, "Reply content is required")
+		return
+	}
+
+	// For demonstration, just return success
+	// In real implementation, you'd save to database
+	logger.Info("Reply posted", "user", userCtx.DID, "content", content)
+
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]any{
+		"success":    true,
+		"message":    "Reply posted successfully",
+		"show_reply": false, // Hide the reply form after posting
+	}
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.Error("Failed to encode reply response", "error", err)
+	}
+}
+
+// TopicsStreamHandler streams the latest topics as HTML fragments for datastar
+func (r *Router) TopicsStreamHandler(w http.ResponseWriter, req *http.Request) {
+	sse := datastar.NewSSE(w, req)
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+	ctx := req.Context()
+
+	// Send initial data
+	r.sendTopicsUpdate(ctx, sse)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			r.sendTopicsUpdate(ctx, sse)
+		}
+	}
+}
+
+// sendTopicsUpdate sends the latest topics via SSE
+func (r *Router) sendTopicsUpdate(ctx context.Context, sse *datastar.ServerSentEventGenerator) {
+	topics, err := r.dbService.Queries().ListTopics(ctx, db.ListTopicsParams{
+		Limit:  5,
+		Offset: 0,
+	})
+	if err != nil {
+		logger.Error("Failed to fetch topics for SSE", "error", err)
+		return
+	}
+
+	// Build HTML fragment for topics
+	html := `<div id="live-topics">`
+	html += `<h3>🔴 Live Topics (updates every 3s)</h3>`
+	if len(topics) == 0 {
+		html += `<p><em>No topics yet. Create one to see it appear here!</em></p>`
+	} else {
+		html += `<ul>`
+		for _, topic := range topics {
+			html += fmt.Sprintf(`<li><strong>%s</strong> - %s</li>`,
+				topic.Subject,
+				topic.CreatedAt.Format("15:04:05"))
+		}
+		html += `</ul>`
+	}
+	html += fmt.Sprintf(`<small>Last updated: %s | Total: %d topics</small>`,
+		time.Now().Format("15:04:05"), len(topics))
+	html += `</div>`
+
+	// Send fragment merge
+	sse.MergeFragments(html)
+
+	// Send signal update
+	signals := map[string]any{
+		"last_update":   time.Now().Format("15:04:05"),
+		"topic_count":   len(topics),
+		"stream_active": true,
+	}
+	signalsJSON, err := json.Marshal(signals)
+	if err != nil {
+		logger.Error("Failed to marshal signals", "error", err)
+		return
+	}
+	sse.MergeSignals(signalsJSON)
+}
