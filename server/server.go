@@ -8,6 +8,7 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/config"
 	"github.com/jrschumacher/dis.quest/internal/db"
 	"github.com/jrschumacher/dis.quest/internal/logger"
+	"github.com/jrschumacher/dis.quest/internal/pds"
 	apphandlers "github.com/jrschumacher/dis.quest/server/app"
 	authhandlers "github.com/jrschumacher/dis.quest/server/auth-handlers"
 	wellknownhandlers "github.com/jrschumacher/dis.quest/server/dot-well-known-handlers"
@@ -46,6 +47,9 @@ func Start(cfg *config.Config) {
 		}
 	}()
 
+	// Initialize PDS service (real ATProtocol implementation)
+	pdsService := pds.NewATProtoService()
+
 	mux := http.NewServeMux()
 
 	// Serve static assets with existence check
@@ -64,7 +68,7 @@ func Start(cfg *config.Config) {
 	wellknownhandlers.RegisterRoutes(mux, "/.well-known", cfg)
 	authhandlers.RegisterRoutes(mux, "/auth", cfg)
 	healthhandlers.RegisterRoutes(mux, "/health", cfg)
-	apphandlers.RegisterRoutes(mux, "/", cfg, dbService)
+	apphandlers.RegisterRoutes(mux, "/", cfg, dbService, pdsService)
 
 	// Secure headers middleware
 	handler := secureHeaders(mux)

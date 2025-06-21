@@ -66,6 +66,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getTopicsByCategoryStmt, err = db.PrepareContext(ctx, GetTopicsByCategory); err != nil {
 		return nil, fmt.Errorf("error preparing query GetTopicsByCategory: %w", err)
 	}
+	if q.getTopicsByDIDStmt, err = db.PrepareContext(ctx, GetTopicsByDID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetTopicsByDID: %w", err)
+	}
 	if q.listTopicsStmt, err = db.PrepareContext(ctx, ListTopics); err != nil {
 		return nil, fmt.Errorf("error preparing query ListTopics: %w", err)
 	}
@@ -150,6 +153,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getTopicsByCategoryStmt: %w", cerr)
 		}
 	}
+	if q.getTopicsByDIDStmt != nil {
+		if cerr := q.getTopicsByDIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getTopicsByDIDStmt: %w", cerr)
+		}
+	}
 	if q.listTopicsStmt != nil {
 		if cerr := q.listTopicsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listTopicsStmt: %w", cerr)
@@ -218,6 +226,7 @@ type Queries struct {
 	getRepliesByMessageStmt       *sql.Stmt
 	getTopicStmt                  *sql.Stmt
 	getTopicsByCategoryStmt       *sql.Stmt
+	getTopicsByDIDStmt            *sql.Stmt
 	listTopicsStmt                *sql.Stmt
 	updateParticipationStatusStmt *sql.Stmt
 	updateTopicSelectedAnswerStmt *sql.Stmt
@@ -241,6 +250,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getRepliesByMessageStmt:       q.getRepliesByMessageStmt,
 		getTopicStmt:                  q.getTopicStmt,
 		getTopicsByCategoryStmt:       q.getTopicsByCategoryStmt,
+		getTopicsByDIDStmt:            q.getTopicsByDIDStmt,
 		listTopicsStmt:                q.listTopicsStmt,
 		updateParticipationStatusStmt: q.updateParticipationStatusStmt,
 		updateTopicSelectedAnswerStmt: q.updateTopicSelectedAnswerStmt,

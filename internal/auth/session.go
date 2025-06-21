@@ -125,7 +125,7 @@ func SetDPoPKeyCookie(w http.ResponseWriter, key *ecdsa.PrivateKey, isDev bool) 
 		HttpOnly: true,
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
-		// Optionally: Short expiry, e.g. 10 min
+		MaxAge:   600, // 10 minutes for OAuth flow
 	})
 	return nil
 }
@@ -137,6 +137,20 @@ func GetDPoPKeyFromCookie(r *http.Request) (*ecdsa.PrivateKey, error) {
 		return nil, err
 	}
 	return DecodeDPoPPrivateKeyFromPEM(cookie.Value)
+}
+
+// ClearDPoPKeyCookie clears the DPoP key cookie
+func ClearDPoPKeyCookie(w http.ResponseWriter, isDev bool) {
+	secure := !isDev
+	http.SetCookie(w, &http.Cookie{
+		Name:     dpopKeyCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 // DPoPJWTHeader represents the header of a DPoP JWT
@@ -221,9 +235,48 @@ func CreateDPoPJWTWithNonce(key *ecdsa.PrivateKey, method, targetURL, nonce stri
 		return "", fmt.Errorf("failed to sign DPoP JWT: %w", err)
 	}
 	
-	// Encode signature
-	signature := append(r.Bytes(), s.Bytes()...)
+	// Encode signature in IEEE P1363 format (fixed 32+32 bytes for P-256)
+	signature := make([]byte, 64) // 32 bytes for r + 32 bytes for s
+	rBytes := r.Bytes()
+	sBytes := s.Bytes()
+	
+	// Pad r to 32 bytes (copy to end to preserve leading zeros)
+	copy(signature[32-len(rBytes):32], rBytes)
+	// Pad s to 32 bytes
+	copy(signature[64-len(sBytes):64], sBytes)
+	
 	signatureEncoded := base64.RawURLEncoding.EncodeToString(signature)
 	
 	return signingInput + "." + signatureEncoded, nil
+}
+
+// CalculateJWKThumbprint calculates the SHA-256 thumbprint of a JWK
+// This should match the 'jkt' claim in the access token
+func CalculateJWKThumbprint(jwk map[string]interface{}) (string, error) {
+	// Create a canonical JSON representation of the JWK
+	// Per RFC 7638, only include the required fields in alphabetical order
+	canonical := map[string]interface{}{
+		"crv": jwk["crv"],
+		"kty": jwk["kty"],
+		"x":   jwk["x"],
+		"y":   jwk["y"],
+	}
+	
+	// Marshal to JSON (Go's json.Marshal produces consistent output)
+	jsonBytes, err := json.Marshal(canonical)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal canonical JWK: %w", err)
+	}
+	
+	// Calculate SHA-256 hash
+	hash := sha256.Sum256(jsonBytes)
+	
+	// Return base64url-encoded thumbprint
+	return base64.RawURLEncoding.EncodeToString(hash[:]), nil
+}
+
+// GetJWKThumbprint returns the JWK thumbprint for this DPoP key
+func (k *DPoPKeyPair) GetJWKThumbprint() (string, error) {
+	jwk := k.DPoPPublicJWK()
+	return CalculateJWKThumbprint(jwk)
 }

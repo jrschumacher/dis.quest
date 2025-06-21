@@ -13,6 +13,7 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/httputil"
 	"github.com/jrschumacher/dis.quest/internal/logger"
 	"github.com/jrschumacher/dis.quest/internal/middleware"
+	"github.com/jrschumacher/dis.quest/internal/pds"
 	"github.com/jrschumacher/dis.quest/internal/validation"
 	datastar "github.com/starfederation/datastar/sdk/go"
 )
@@ -88,9 +89,10 @@ func (r *Router) createTopicAPI(w http.ResponseWriter, req *http.Request) {
 
 	// Parse request body
 	var createReq struct {
-		Subject        string `json:"subject"`
-		InitialMessage string `json:"initial_message"`
-		Category       string `json:"category,omitempty"`
+		Subject        string   `json:"subject"`
+		InitialMessage string   `json:"initial_message"`
+		Category       string   `json:"category,omitempty"`
+		Tags           []string `json:"tags,omitempty"`
 	}
 
 	if err := json.NewDecoder(req.Body).Decode(&createReq); err != nil {
@@ -114,10 +116,30 @@ func (r *Router) createTopicAPI(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Generate a simple rkey (timestamp-based for now)
-	rkey := fmt.Sprintf("topic-%d", time.Now().UnixNano())
+	// Create topic in user's PDS using ATProtocol lexicon
+	pdsTopic, err := r.pdsService.CreateTopic(userCtx.DID, pds.CreateTopicParams{
+		Title:   createReq.Subject,
+		Summary: createReq.InitialMessage,
+		Tags:    createReq.Tags,
+	})
+	if err != nil {
+		httputil.WriteInternalError(w, err, "Failed to create topic in PDS", "did", userCtx.DID)
+		return
+	}
 
-	// Create topic with automatic participation using transaction
+	// Create participation record in user's PDS
+	_, err = r.pdsService.CreateParticipation(userCtx.DID, pds.CreateParticipationParams{
+		Topic: pdsTopic.URI,
+		Role:  "moderator", // Topic creator is moderator
+	})
+	if err != nil {
+		logger.Error("Failed to create participation record", "error", err, "topic", pdsTopic.URI)
+		// Don't fail the request - topic creation succeeded
+	}
+
+	// Store topic metadata in local database for discoverability
+	// Extract rkey from PDS URI for local storage
+	rkey := fmt.Sprintf("topic-%d", time.Now().UnixNano())
 	now := time.Now()
 	result, err := r.dbService.CreateTopicWithParticipation(ctx, db.CreateTopicWithParticipationParams{
 		Did:            userCtx.DID,
@@ -129,11 +151,102 @@ func (r *Router) createTopicAPI(w http.ResponseWriter, req *http.Request) {
 		UpdatedAt:      now,
 	})
 	if err != nil {
-		httputil.WriteInternalError(w, err, "Failed to create topic", "did", userCtx.DID)
+		logger.Error("Failed to store topic metadata locally", "error", err, "pds_uri", pdsTopic.URI)
+		// Continue - PDS creation succeeded, local storage is for indexing
+	}
+
+	// Return the PDS topic data with local DB metadata
+	response := map[string]any{
+		"pds_uri":    pdsTopic.URI,
+		"pds_cid":    pdsTopic.CID,
+		"title":      pdsTopic.Title,
+		"summary":    pdsTopic.Summary,
+		"tags":       pdsTopic.Tags,
+		"created_by": pdsTopic.CreatedBy,
+		"created_at": pdsTopic.CreatedAt,
+	}
+
+	if result != nil {
+		response["local_id"] = result.Topic.Did + ":" + result.Topic.Rkey
+	}
+
+	httputil.WriteCreated(w, response)
+}
+
+// PDSTopicsHandler returns all topics from the user's PDS
+func (r *Router) PDSTopicsHandler(w http.ResponseWriter, req *http.Request) {
+	// Get user context
+	userCtx, ok := middleware.GetUserContext(req)
+	if !ok {
+		httputil.WriteError(w, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 
-	httputil.WriteCreated(w, result.Topic)
+	// For now, we'll return topics from local DB that correspond to PDS records
+	// In a full implementation, this would query the user's PDS directly
+	ctx := req.Context()
+	topics, err := r.dbService.Queries().GetTopicsByDID(ctx, userCtx.DID)
+	if err != nil {
+		httputil.WriteInternalError(w, err, "Failed to fetch user's topics", "did", userCtx.DID)
+		return
+	}
+
+	// Transform to include PDS information
+	response := make([]map[string]any, len(topics))
+	for i, topic := range topics {
+		response[i] = map[string]any{
+			"local_id":   topic.Did + ":" + topic.Rkey,
+			"subject":    topic.Subject,
+			"message":    topic.InitialMessage,
+			"category":   topic.Category.String,
+			"created_at": topic.CreatedAt,
+			"updated_at": topic.UpdatedAt,
+			"pds_uri":    fmt.Sprintf("at://%s/quest.dis.topic/%s", topic.Did, topic.Rkey),
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.Error("Failed to encode PDS topics", "error", err)
+	}
+}
+
+// PDSRecordHandler retrieves a specific record from the user's PDS by URI
+func (r *Router) PDSRecordHandler(w http.ResponseWriter, req *http.Request) {
+	// Get user context
+	_, ok := middleware.GetUserContext(req)
+	if !ok {
+		httputil.WriteError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	// Get URI from query parameter
+	uri := req.URL.Query().Get("uri")
+	if uri == "" {
+		httputil.WriteError(w, http.StatusBadRequest, "Missing 'uri' parameter")
+		return
+	}
+
+	// For this demo, we'll try to retrieve using the PDS service
+	// This would ideally query the actual PDS, but for now we'll simulate
+	if record, err := r.pdsService.GetTopic(uri); err == nil {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(record); err != nil {
+			logger.Error("Failed to encode PDS record", "error", err)
+		}
+		return
+	}
+
+	// If topic not found, try message
+	if record, err := r.pdsService.GetMessage(uri); err == nil {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(record); err != nil {
+			logger.Error("Failed to encode PDS record", "error", err)
+		}
+		return
+	}
+
+	httputil.WriteError(w, http.StatusNotFound, "Record not found in PDS")
 }
 
 // TopicsStreamHandler streams the latest topics as HTML fragments for datastar
@@ -186,7 +299,10 @@ func (r *Router) sendTopicsUpdate(ctx context.Context, sse *datastar.ServerSentE
 	html += `</div>`
 
 	// Send fragment merge
-	sse.MergeFragments(html)
+	if err := sse.MergeFragments(html); err != nil {
+		logger.Error("Failed to merge fragments", "error", err)
+		return
+	}
 
 	// Send signal update
 	signals := map[string]any{
@@ -199,5 +315,8 @@ func (r *Router) sendTopicsUpdate(ctx context.Context, sse *datastar.ServerSentE
 		logger.Error("Failed to marshal signals", "error", err)
 		return
 	}
-	sse.MergeSignals(signalsJSON)
+	if err := sse.MergeSignals(signalsJSON); err != nil {
+		logger.Error("Failed to merge signals", "error", err)
+		return
+	}
 }

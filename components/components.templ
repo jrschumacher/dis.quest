@@ -33,12 +33,19 @@ templ DevBanner(appEnv string) {
 }
 
 templ Login() {
+	@LoginWithRedirect("")
+}
+
+templ LoginWithRedirect(redirectURL string) {
 	<section class="login-section">
 		<div class="card login-card">
 			<h2 class="brand" style="text-align:center; margin-bottom:2rem;">Login to <span class="brand">dis.quest</span></h2>
 			<form method="get" action="/auth/redirect" style="display:flex; flex-direction:column; gap:1.2rem;">
 				<label for="handle">Handle</label>
 				<input type="text" id="handle" name="handle" placeholder="your.handle.bsky.social" required />
+				if redirectURL != "" {
+					<input type="hidden" name="redirect" value={ redirectURL } />
+				}
 				<button type="submit" class="contrast btn-main" style="width:100%;">
 					<span>Continue</span>
 				</button>

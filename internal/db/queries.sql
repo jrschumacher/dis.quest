@@ -29,6 +29,11 @@ UPDATE quest_dis_topic
 SET selected_answer = $1, updated_at = $2
 WHERE did = $3 AND rkey = $4;
 
+-- name: GetTopicsByDID :many
+SELECT * FROM quest_dis_topic
+WHERE did = $1
+ORDER BY created_at DESC;
+
 -- name: DeleteTopic :exec
 DELETE FROM quest_dis_topic
 WHERE did = $1 AND rkey = $2;

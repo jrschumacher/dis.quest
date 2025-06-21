@@ -11,6 +11,7 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/httputil"
 	"github.com/jrschumacher/dis.quest/internal/logger"
 	"github.com/jrschumacher/dis.quest/internal/middleware"
+	"github.com/jrschumacher/dis.quest/internal/pds"
 	"github.com/jrschumacher/dis.quest/internal/validation"
 )
 
@@ -74,6 +75,7 @@ func (r *Router) createMessageAPI(w http.ResponseWriter, req *http.Request, topi
 	var createReq struct {
 		Content           string `json:"content"`
 		ParentMessageRkey string `json:"parent_message_rkey,omitempty"`
+		TopicURI          string `json:"topic_uri,omitempty"` // PDS topic URI
 	}
 
 	if err := json.NewDecoder(req.Body).Decode(&createReq); err != nil {
@@ -96,35 +98,60 @@ func (r *Router) createMessageAPI(w http.ResponseWriter, req *http.Request, topi
 		return
 	}
 
-	// For now, assume topicID format is "did:rkey"
-	// TODO: Implement proper topic ID parsing
-	parts := []string{topicID, topicID} // placeholder
-	if len(parts) != 2 {
-		httputil.WriteError(w, http.StatusBadRequest, "Invalid topic ID format")
-		return
+	// Use PDS topic URI if provided, otherwise fall back to local topic ID
+	topicURI := createReq.TopicURI
+	if topicURI == "" {
+		// For backwards compatibility, convert local topic ID to PDS URI
+		// In real implementation, you'd look this up from local DB
+		topicURI = fmt.Sprintf("at://%s/quest.dis.topic/%s", userCtx.DID, topicID)
 	}
 
-	// Generate a simple rkey for the message
-	rkey := fmt.Sprintf("msg-%d", time.Now().UnixNano())
-
-	// Create message
-	now := time.Now()
-	message, err := r.dbService.Queries().CreateMessage(ctx, db.CreateMessageParams{
-		Did:               userCtx.DID,
-		Rkey:              rkey,
-		TopicDid:          parts[0],
-		TopicRkey:         parts[1],
-		ParentMessageRkey: sql.NullString{String: createReq.ParentMessageRkey, Valid: createReq.ParentMessageRkey != ""},
-		Content:           createReq.Content,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+	// Create message in user's PDS
+	pdsMessage, err := r.pdsService.CreateMessage(userCtx.DID, pds.CreateMessageParams{
+		Topic:   topicURI,
+		Content: createReq.Content,
+		ReplyTo: createReq.ParentMessageRkey,
 	})
 	if err != nil {
-		httputil.WriteInternalError(w, err, "Failed to create message", "did", userCtx.DID, "topicID", topicID)
+		httputil.WriteInternalError(w, err, "Failed to create message in PDS", "did", userCtx.DID, "topic", topicURI)
 		return
 	}
 
-	httputil.WriteCreated(w, message)
+	// Store message metadata locally for indexing (optional)
+	// For now, assume topicID format is "did:rkey" for local storage
+	parts := []string{topicID, topicID} // placeholder - in real implementation, parse properly
+	if len(parts) == 2 {
+		rkey := fmt.Sprintf("msg-%d", time.Now().UnixNano())
+		now := time.Now()
+		localMessage, err := r.dbService.Queries().CreateMessage(ctx, db.CreateMessageParams{
+			Did:               userCtx.DID,
+			Rkey:              rkey,
+			TopicDid:          parts[0],
+			TopicRkey:         parts[1],
+			ParentMessageRkey: sql.NullString{String: createReq.ParentMessageRkey, Valid: createReq.ParentMessageRkey != ""},
+			Content:           createReq.Content,
+			CreatedAt:         now,
+			UpdatedAt:         now,
+		})
+		if err != nil {
+			logger.Error("Failed to store message metadata locally", "error", err, "pds_uri", pdsMessage.URI)
+			// Continue - PDS creation succeeded, local storage is for indexing
+		} else {
+			logger.Info("Message stored locally", "local_id", localMessage.Did+":"+localMessage.Rkey, "pds_uri", pdsMessage.URI)
+		}
+	}
+
+	// Return PDS message data
+	response := map[string]any{
+		"pds_uri":    pdsMessage.URI,
+		"pds_cid":    pdsMessage.CID,
+		"topic":      pdsMessage.Topic,
+		"content":    pdsMessage.Content,
+		"reply_to":   pdsMessage.ReplyTo,
+		"created_at": pdsMessage.CreatedAt,
+	}
+
+	httputil.WriteCreated(w, response)
 }
 
 // LikeMessageHandler handles liking/unliking messages

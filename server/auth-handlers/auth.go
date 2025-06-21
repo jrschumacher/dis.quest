@@ -2,8 +2,14 @@
 package auth
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/jrschumacher/dis.quest/internal/auth"
 	"github.com/jrschumacher/dis.quest/internal/config"
@@ -68,18 +74,57 @@ func (rt *Router) LoginHandlerWithConfig(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	auth.SetSessionCookieWithEnv(w, session.AccessJwt, []string{session.RefreshJwt}, cfg.AppEnv == "development")
-	http.Redirect(w, r, "/discussion", http.StatusSeeOther)
+	
+	// Check for redirect URL and use it, otherwise default to /discussion
+	redirectURL := "/discussion"
+	if cookie, err := r.Cookie("redirect_after_login"); err == nil && cookie.Value != "" {
+		if isValidRedirectURL(cookie.Value) {
+			redirectURL = cookie.Value
+		}
+		// Clear the redirect cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "redirect_after_login",
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+			Secure:   cfg.AppEnv != "development",
+			SameSite: http.SameSiteLaxMode,
+		})
+	}
+	
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }
 
 // LogoutHandler handles /auth/logout requests
 func (rt *Router) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	auth.ClearSessionCookie(w)
+	
+	// Check for redirect parameter to redirect to login with return URL
+	redirectURL := r.URL.Query().Get("redirect")
+	if redirectURL != "" && isValidRedirectURL(redirectURL) {
+		// Redirect to login page with the redirect parameter
+		loginURL := fmt.Sprintf("/login?redirect=%s", redirectURL)
+		http.Redirect(w, r, loginURL, http.StatusSeeOther)
+		return
+	}
+	
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // LogoutHandlerWithConfig handles /auth/logout requests with config for cookie security
 func (rt *Router) LogoutHandlerWithConfig(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
 	auth.ClearSessionCookieWithEnv(w, cfg.AppEnv == "development")
+	
+	// Check for redirect parameter to redirect to login with return URL
+	redirectURL := r.URL.Query().Get("redirect")
+	if redirectURL != "" && isValidRedirectURL(redirectURL) {
+		// Redirect to login page with the redirect parameter
+		loginURL := fmt.Sprintf("/login?redirect=%s", redirectURL)
+		http.Redirect(w, r, loginURL, http.StatusSeeOther)
+		return
+	}
+	
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -89,6 +134,23 @@ func (rt *Router) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 	if handle == "" {
 		writeError(w, http.StatusBadRequest, "Missing handle", "param", "handle")
 		return
+	}
+	
+	// Store redirect URL in cookie if provided
+	redirectURL := r.URL.Query().Get("redirect")
+	if redirectURL != "" {
+		// Validate redirect URL to prevent open redirects
+		if isValidRedirectURL(redirectURL) {
+			http.SetCookie(w, &http.Cookie{
+				Name:     "redirect_after_login",
+				Value:    redirectURL,
+				Path:     "/",
+				MaxAge:   600, // 10 minutes
+				HttpOnly: true,
+				Secure:   rt.Config.AppEnv != "development",
+				SameSite: http.SameSiteLaxMode,
+			})
+		}
 	}
 	metadata, err := auth.DiscoverAuthorizationServer(handle)
 	if err != nil {
@@ -111,18 +173,24 @@ func (rt *Router) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to set DPoP key cookie", "handle", handle, "error", err)
 		return
 	}
+	secure := cfg.AppEnv != "development"
 	http.SetCookie(w, &http.Cookie{
 		Name:     "pkce_verifier",
 		Value:    codeVerifier,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   600, // 10 minutes
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name:     "oauth_handle",
 		Value:    handle,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   600, // 10 minutes
 	})
 	state := auth.GenerateStateToken()
 	http.SetCookie(w, &http.Cookie{
@@ -130,7 +198,9 @@ func (rt *Router) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 		Value:    state,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   600, // 10 minutes
 	})
 	conf := auth.OAuth2Config(metadata, cfg)
 	url := conf.AuthCodeURL(state,
@@ -144,12 +214,25 @@ func (rt *Router) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 // CallbackHandler handles /auth/callback requests
 func (rt *Router) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	
+	// Log all query parameters for debugging
+	logger.Info("OAuth callback received", "url", r.URL.String(), "params", r.URL.Query())
+	
 	handleCookie, err := r.Cookie("oauth_handle")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Missing handle context")
 		return
 	}
 	handle := handleCookie.Value
+	
+	// Check for error parameter first
+	if errorParam := r.URL.Query().Get("error"); errorParam != "" {
+		errorDesc := r.URL.Query().Get("error_description")
+		logger.Error("OAuth authorization failed", "handle", handle, "error", errorParam, "description", errorDesc)
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Authorization failed: %s - %s", errorParam, errorDesc), "handle", handle)
+		return
+	}
+	
 	metadata, err := auth.DiscoverAuthorizationServer(handle)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to rediscover authorization server", "handle", handle, "error", err)
@@ -157,6 +240,7 @@ func (rt *Router) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	code := r.URL.Query().Get("code")
 	if code == "" {
+		logger.Error("No authorization code received", "handle", handle, "allParams", r.URL.Query())
 		writeError(w, http.StatusBadRequest, "Missing code", "handle", handle)
 		return
 	}
@@ -193,7 +277,50 @@ func (rt *Router) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Use config for secure flag
 	auth.SetSessionCookieWithEnv(w, token.AccessToken, []string{refreshToken}, cfg.AppEnv == "development")
-	http.Redirect(w, r, "/discussion", http.StatusSeeOther)
+	
+	// Check for redirect URL and use it, otherwise default to /discussion
+	redirectURL := "/discussion"
+	if cookie, err := r.Cookie("redirect_after_login"); err == nil && cookie.Value != "" {
+		if isValidRedirectURL(cookie.Value) {
+			redirectURL = cookie.Value
+		}
+		// Clear the redirect cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "redirect_after_login",
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+			Secure:   cfg.AppEnv != "development",
+			SameSite: http.SameSiteLaxMode,
+		})
+	}
+	
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+}
+
+// getClientAuthJWK creates a JWK for client authentication from the app's JWKS
+func getClientAuthJWK(cfg *config.Config) map[string]interface{} {
+	// For now, use the same key from JWKS for client authentication
+	// In production, you might want a separate client auth key
+	var jwks struct {
+		Keys []map[string]interface{} `json:"keys"`
+	}
+	
+	if err := json.Unmarshal([]byte(cfg.JWKSPublic), &jwks); err != nil || len(jwks.Keys) == 0 {
+		// Fallback: generate a temporary key if JWKS parsing fails
+		key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		return map[string]interface{}{
+			"kty": "EC",
+			"crv": "P-256", 
+			"x":   base64.RawURLEncoding.EncodeToString(key.PublicKey.X.Bytes()),
+			"y":   base64.RawURLEncoding.EncodeToString(key.PublicKey.Y.Bytes()),
+			"alg": "ES256",
+			"use": "sig",
+		}
+	}
+	
+	return jwks.Keys[0]
 }
 
 // ClientMetadataHandler serves the OAuth client metadata JSON for Bluesky
@@ -201,6 +328,10 @@ func (rt *Router) ClientMetadataHandler(w http.ResponseWriter, _ *http.Request) 
 	cfg := rt.Config
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	
+	// Get client authentication public key from JWKS
+	clientPublicJWK := getClientAuthJWK(cfg)
+	clientJWKJSON, _ := json.Marshal(clientPublicJWK)
 	
 	// Use config values for dynamic metadata
 	metadata := fmt.Sprintf(`{
@@ -213,10 +344,21 @@ func (rt *Router) ClientMetadataHandler(w http.ResponseWriter, _ *http.Request) 
 	  "scope": "atproto transition:generic",
 	  "response_types": ["code"],  
 	  "redirect_uris": ["%s"],
-	  "token_endpoint_auth_method": "none"
-	}`, cfg.OAuthClientID, cfg.AppName, cfg.PublicDomain, cfg.OAuthRedirectURL)
+	  "token_endpoint_auth_method": "private_key_jwt",
+	  "token_endpoint_auth_signing_alg": "ES256",
+	  "jwks": {
+		"keys": [%s]
+	  }
+	}`, cfg.OAuthClientID, cfg.AppName, cfg.PublicDomain, cfg.OAuthRedirectURL, string(clientJWKJSON))
 	
 	_, _ = w.Write([]byte(metadata))
+}
+
+// isValidRedirectURL validates that the redirect URL is safe to prevent open redirects
+func isValidRedirectURL(url string) bool {
+	// Only allow relative URLs that start with /
+	// This prevents open redirects to external sites
+	return strings.HasPrefix(url, "/") && !strings.HasPrefix(url, "//")
 }
 
 // writeError is a helper to write an error response and log it

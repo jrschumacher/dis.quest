@@ -17,7 +17,12 @@ func (r *Router) LandingHandler(w http.ResponseWriter, _ *http.Request) {
 
 // LoginHandler renders the login page
 func (r *Router) LoginHandler(w http.ResponseWriter, req *http.Request) {
-	_ = components.Login().Render(req.Context(), w)
+	redirectURL := req.URL.Query().Get("redirect")
+	if redirectURL != "" {
+		_ = components.LoginWithRedirect(redirectURL).Render(req.Context(), w)
+	} else {
+		_ = components.Login().Render(req.Context(), w)
+	}
 }
 
 // DiscussionHandler shows the discussion page with mock data

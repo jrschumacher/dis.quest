@@ -172,7 +172,8 @@ func OAuth2Config(metadata *AuthorizationServerMetadata, cfg *config.Config) *oa
 		ClientID:     cfg.OAuthClientID,
 		ClientSecret: "", // Not required for public clients
 		RedirectURL:  cfg.OAuthRedirectURL,
-		Scopes:       []string{"atproto", "transition:generic"},
+		// CRITICAL: Scope format must match Tangled.sh's working implementation
+		Scopes:       []string{"atproto transition:generic"},
 		Endpoint: oauth2.Endpoint{
 			AuthURL:  metadata.AuthorizationEndpoint,
 			TokenURL: metadata.TokenEndpoint,
@@ -195,6 +196,8 @@ func SetSessionCookieWithEnv(w http.ResponseWriter, accessToken string, refreshT
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   3600, // 1 hour
 	})
 	if len(refreshToken) > 0 && refreshToken[0] != "" {
 		http.SetCookie(w, &http.Cookie{
@@ -203,6 +206,8 @@ func SetSessionCookieWithEnv(w http.ResponseWriter, accessToken string, refreshT
 			Path:     "/",
 			HttpOnly: true,
 			Secure:   secure,
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   86400, // 24 hours
 		})
 	}
 }
@@ -223,6 +228,7 @@ func ClearSessionCookieWithEnv(w http.ResponseWriter, isDev bool) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name:     refreshTokenCookieName,
@@ -231,7 +237,10 @@ func ClearSessionCookieWithEnv(w http.ResponseWriter, isDev bool) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
 	})
+	// Also clear the DPoP key cookie to prevent key reuse with new tokens
+	ClearDPoPKeyCookie(w, isDev)
 }
 
 // ClearSessionCookie clears session cookies with default production settings

@@ -1,0 +1,327 @@
+package components
+
+import (
+	"fmt"
+	"time"
+)
+
+func getInitialSignals(data DevPDSPageData) string {
+	testDID := "did:plc:test123456789"
+	if data.HasAuth {
+		testDID = data.UserDID
+	}
+	return fmt.Sprintf(`{"testDID": "%s", "topicURI": "at://did:plc:test123/quest.dis.topic/topic-123", "results": [], "operation": ""}`, testDID)
+}
+
+type DevPDSPageData struct {
+	Title           string
+	HasAuth         bool
+	UserDID         string
+	TestResults     []interface{} // Will be handled by Datastar signals
+	TokenExpired    bool
+	TokenExpiration time.Time
+}
+
+templ DevPDSPage(data DevPDSPageData) {
+	<div class="container" data-signals={getInitialSignals(data)}>
+		<h1>🔧 PDS Development Tools</h1>
+		<p>Test and validate ATProtocol PDS functionality</p>
+		
+		<!-- Authentication Status -->
+		if !data.HasAuth {
+			<div class="alert alert-error">
+				<h3>🚫 Authentication Required</h3>
+				<p><strong>You must be logged in to test PDS functionality.</strong></p>
+				<p><a href="/login?redirect=%2Fdev%2Fpds" class="button">Login with Bluesky</a></p>
+			</div>
+		} else if data.TokenExpired {
+			<div class="alert alert-error">
+				<h3>⏰ Session Expired</h3>
+				<p><strong>Your access token has expired and PDS tests will fail.</strong></p>
+				<p>Token expired at: <code>{ data.TokenExpiration.Format("2006-01-02 15:04:05 MST") }</code></p>
+				<p><a href="/login?redirect=%2Fdev%2Fpds" class="button">Re-login to Refresh Token</a></p>
+			</div>
+		} else {
+			<div class="alert alert-success">
+				<h3>✅ Authenticated & Ready</h3>
+				<p>Your DID: <code>{ data.UserDID }</code></p>
+				if !data.TokenExpiration.IsZero() {
+					<p><small>Token expires: { data.TokenExpiration.Format("2006-01-02 15:04:05 MST") }</small></p>
+				}
+				<div style="margin-top: 1rem;">
+					<a href="/auth/logout?redirect=%2Fdev%2Fpds" class="button button-secondary" style="margin-right: 0.5rem;">
+						🔄 Force Re-authenticate
+					</a>
+					<small>Use this if PDS operations fail due to scope issues</small>
+				</div>
+			</div>
+		}
+
+		<div class="grid">
+			<!-- Test Controls -->
+			<div>
+				<h2>Test Operations</h2>
+				
+				<details open>
+					<summary>Lexicon & Validation Tests</summary>
+					<div class="test-section">
+						<button 
+							data-on-click="$operation = 'validate_lexicons'; @post('/dev/pds/test')"
+						>
+							Test Lexicon Validation
+						</button>
+						<p><small>Tests quest.dis.topic schema validation</small></p>
+					</div>
+				</details>
+
+				<details open>
+					<summary>URI & Parsing Tests</summary>
+					<div class="test-section">
+						<button 
+							data-on-click="$operation = 'test_uri_parsing'; @post('/dev/pds/test')"
+						>
+							Test AT URI Parsing
+						</button>
+						<p><small>Tests parsing of at:// URIs</small></p>
+					</div>
+				</details>
+
+				<details open>
+					<summary>PDS Simulation Tests</summary>
+					<div class="test-section">
+						<label>Test DID:</label>
+						<input 
+							type="text" 
+							data-bind="$testDID"
+							placeholder="did:plc:test123456789"
+						/>
+						
+						<button 
+							data-on-click="$operation = 'simulate_create_topic'; @post('/dev/pds/test')"
+						>
+							Simulate Create Topic
+						</button>
+						
+						<label>Topic URI:</label>
+						<input 
+							type="text" 
+							data-bind="$topicURI"
+							placeholder="at://did:plc:test123/quest.dis.topic/topic-123"
+						/>
+						
+						<button 
+							data-on-click="$operation = 'simulate_get_topic'; @post('/dev/pds/test')"
+						>
+							Simulate Get Topic
+						</button>
+						
+						<p><small>Tests PDS operations without real HTTP calls</small></p>
+					</div>
+				</details>
+
+				<details open>
+					<summary>Real PDS Structure Tests</summary>
+					<div class="test-section">
+						<button 
+							data-on-click="$operation = 'test_real_pds_structure'; @post('/dev/pds/test')"
+						>
+							Test Real PDS Structure
+						</button>
+						<p><small>Tests what would be sent to real PDS (expects auth failure)</small></p>
+					</div>
+				</details>
+
+				<details open>
+					<summary>Real PDS Browsing</summary>
+					<div class="test-section">
+						<button 
+							data-on-click="$operation = 'browse_real_pds'; @post('/dev/pds/test')"
+						>
+							Browse Real PDS Structure
+						</button>
+						<p><small>Attempts to browse your actual PDS (shows auth requirements)</small></p>
+						
+						<button 
+							data-on-click="$operation = 'list_pds_topics'; @post('/dev/pds/test')"
+						>
+							List PDS Topics
+						</button>
+						<p><small>Shows what's needed to list your quest.dis.topic records</small></p>
+						
+						<button 
+							data-on-click="$operation = 'get_pds_record'; @post('/dev/pds/test')"
+						>
+							Get PDS Record
+						</button>
+						<p><small>Tests retrieving a specific record by AT URI</small></p>
+						
+						<button 
+							data-on-click="$operation = 'create_random_topic'; @post('/dev/pds/test')"
+						>
+							Create Random Topic
+						</button>
+						<p><small>Creates a real topic with random data in your PDS</small></p>
+						
+						<button 
+							data-on-click="$operation = 'test_standard_post'; @post('/dev/pds/test')"
+							class="button button-secondary"
+						>
+							Test Standard Post
+						</button>
+						<p><small>Creates a standard Bluesky post to test DPoP implementation</small></p>
+						
+						<button 
+							data-on-click="$operation = 'test_session_auth'; @post('/dev/pds/test')"
+							class="button button-secondary"
+						>
+							Test Session Auth (WhiteWind Style)
+						</button>
+						<p><small>Tests session-based auth approach that bypasses OAuth scope restrictions</small></p>
+					</div>
+				</details>
+
+				if data.HasAuth {
+					<details>
+						<summary>🔓 Authenticated PDS Access</summary>
+						<div class="test-section">
+							<p><strong>Your DID:</strong> <code>{ data.UserDID }</code></p>
+							<p><strong>Next:</strong> Wire up your access token to see real records!</p>
+							<p><small>With auth integration, you could see actual quest.dis.* records in your PDS</small></p>
+						</div>
+					</details>
+				}
+			</div>
+
+			<!-- Results Panel -->
+			<div>
+				<h2>Test Results</h2>
+				<div id="test-results">
+					<p><em>Run tests to see results here...</em></p>
+				</div>
+			</div>
+		</div>
+
+		<!-- Current Implementation Status -->
+		<details>
+			<summary>📋 Implementation Status</summary>
+			<div class="status-grid">
+				<div class="status-item completed">
+					<h4>✅ XRPC Client</h4>
+					<p>Generic ATProtocol operations</p>
+				</div>
+				<div class="status-item completed">
+					<h4>✅ Lexicon Framework</h4>
+					<p>quest.dis.* schema validation</p>
+				</div>
+				<div class="status-item completed">
+					<h4>✅ Real PDS Service</h4>
+					<p>Production implementation</p>
+				</div>
+				<div class="status-item pending">
+					<h4>🔄 Access Token Integration</h4>
+					<p>User session → PDS auth</p>
+				</div>
+				<div class="status-item pending">
+					<h4>🔄 DPoP Headers</h4>
+					<p>Enhanced security</p>
+				</div>
+			</div>
+		</details>
+
+		<style>
+			.test-section {
+				margin: 1rem 0;
+				padding: 1rem;
+				border: 1px solid var(--muted-border-color);
+				border-radius: 0.5rem;
+			}
+			.test-section button {
+				margin: 0.5rem 0;
+			}
+			.test-section input {
+				width: 100%;
+				margin: 0.5rem 0;
+			}
+			.test-result {
+				margin: 1rem 0;
+				padding: 1rem;
+				border-radius: 0.5rem;
+				border: 1px solid;
+			}
+			.result-success {
+				border-color: var(--valid-color, green);
+				background-color: color-mix(in srgb, var(--valid-color, green) 10%, transparent);
+			}
+			.result-error {
+				border-color: var(--invalid-color, red);
+				background-color: color-mix(in srgb, var(--invalid-color, red) 10%, transparent);
+			}
+			.result-details {
+				background: var(--code-background-color, #f5f5f5);
+				padding: 0.5rem;
+				border-radius: 0.25rem;
+				font-family: monospace;
+				white-space: pre-wrap;
+			}
+			.status-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+				gap: 1rem;
+				margin: 1rem 0;
+			}
+			.status-item {
+				padding: 1rem;
+				border-radius: 0.5rem;
+				border: 1px solid;
+			}
+			.status-item.completed {
+				border-color: var(--valid-color, green);
+				background-color: color-mix(in srgb, var(--valid-color, green) 10%, transparent);
+			}
+			.status-item.pending {
+				border-color: var(--warning-color, orange);
+				background-color: color-mix(in srgb, var(--warning-color, orange) 10%, transparent);
+			}
+			.alert {
+				padding: 1rem;
+				border-radius: 0.5rem;
+				margin: 1rem 0;
+				border: 1px solid;
+			}
+			.alert-success {
+				border-color: var(--valid-color, green);
+				background-color: color-mix(in srgb, var(--valid-color, green) 10%, transparent);
+			}
+			.alert-warning {
+				border-color: var(--warning-color, orange);
+				background-color: color-mix(in srgb, var(--warning-color, orange) 10%, transparent);
+			}
+			.alert-error {
+				border-color: var(--invalid-color, red);
+				background-color: color-mix(in srgb, var(--invalid-color, red) 10%, transparent);
+			}
+			.button {
+				display: inline-block;
+				padding: 0.5rem 1rem;
+				background-color: var(--primary-color, #007bff);
+				color: white;
+				text-decoration: none;
+				border-radius: 0.25rem;
+				border: none;
+				cursor: pointer;
+			}
+			.button:hover {
+				background-color: var(--primary-hover-color, #0056b3);
+				color: white;
+			}
+			.button-secondary {
+				background-color: var(--secondary-color, #6c757d);
+				border: 1px solid var(--secondary-color, #6c757d);
+			}
+			.button-secondary:hover {
+				background-color: var(--secondary-hover-color, #545b62);
+				color: white;
+			}
+		</style>
+	</div>
+}

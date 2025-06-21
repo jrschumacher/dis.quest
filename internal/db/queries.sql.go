@@ -473,6 +473,44 @@ func (q *Queries) GetTopicsByCategory(ctx context.Context, arg GetTopicsByCatego
 	return items, nil
 }
 
+const GetTopicsByDID = `-- name: GetTopicsByDID :many
+SELECT did, rkey, subject, initial_message, category, created_at, updated_at, selected_answer FROM quest_dis_topic
+WHERE did = $1
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetTopicsByDID(ctx context.Context, did string) ([]Topic, error) {
+	rows, err := q.query(ctx, q.getTopicsByDIDStmt, GetTopicsByDID, did)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Topic{}
+	for rows.Next() {
+		var i Topic
+		if err := rows.Scan(
+			&i.Did,
+			&i.Rkey,
+			&i.Subject,
+			&i.InitialMessage,
+			&i.Category,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SelectedAnswer,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const ListTopics = `-- name: ListTopics :many
 SELECT did, rkey, subject, initial_message, category, created_at, updated_at, selected_answer FROM quest_dis_topic
 ORDER BY created_at DESC
