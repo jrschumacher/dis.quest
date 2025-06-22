@@ -13,7 +13,7 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/httputil"
 	"github.com/jrschumacher/dis.quest/internal/logger"
 	"github.com/jrschumacher/dis.quest/internal/middleware"
-	"github.com/jrschumacher/dis.quest/internal/pds"
+	"github.com/jrschumacher/dis.quest/internal/lexicons"
 	"github.com/jrschumacher/dis.quest/internal/validation"
 	datastar "github.com/starfederation/datastar/sdk/go"
 )
@@ -117,7 +117,7 @@ func (r *Router) createTopicAPI(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Create topic in user's PDS using ATProtocol lexicon
-	pdsTopic, err := r.pdsService.CreateTopic(userCtx.DID, pds.CreateTopicParams{
+	pdsTopic, err := r.pdsService.CreateTopic(userCtx.DID, lexicons.CreateTopicParams{
 		Title:   createReq.Subject,
 		Summary: createReq.InitialMessage,
 		Tags:    createReq.Tags,
@@ -128,7 +128,7 @@ func (r *Router) createTopicAPI(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Create participation record in user's PDS
-	_, err = r.pdsService.CreateParticipation(userCtx.DID, pds.CreateParticipationParams{
+	_, err = r.pdsService.CreateParticipation(userCtx.DID, lexicons.CreateParticipationParams{
 		Topic: pdsTopic.URI,
 		Role:  "moderator", // Topic creator is moderator
 	})

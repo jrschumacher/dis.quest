@@ -11,10 +11,12 @@ import (
 	"time"
 
 	"github.com/jrschumacher/dis.quest/components"
-	"github.com/jrschumacher/dis.quest/internal/auth"
+	"github.com/jrschumacher/dis.quest/internal/web"
+	"github.com/jrschumacher/dis.quest/pkg/atproto/oauth"
+	"github.com/jrschumacher/dis.quest/pkg/atproto/xrpc"
 	"github.com/jrschumacher/dis.quest/internal/logger"
 	"github.com/jrschumacher/dis.quest/internal/middleware"
-	"github.com/jrschumacher/dis.quest/internal/pds"
+	"github.com/jrschumacher/dis.quest/internal/lexicons"
 	atproto "github.com/jrschumacher/dis.quest/pkg/atproto"
 	datastar "github.com/starfederation/datastar/sdk/go"
 )
@@ -42,7 +44,7 @@ func (r *Router) DevPDSHandler(w http.ResponseWriter, req *http.Request) {
 	var tokenExpired bool
 	var tokenExpiration time.Time
 	if hasAuth {
-		if accessToken, err := auth.GetSessionCookie(req); err == nil && accessToken != "" {
+		if accessToken, err := web.GetSessionCookie(req); err == nil && accessToken != "" {
 			// Simple JWT expiration check
 			parts := strings.Split(accessToken, ".")
 			if len(parts) == 3 {
@@ -441,7 +443,7 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 func (r *Router) testLexiconValidation() TestResult {
 	// Test valid topic record
 	validTopic := map[string]interface{}{
-		"$type":     pds.TopicLexicon,
+		"$type":     lexicons.TopicLexicon,
 		"title":     "Test Topic",
 		"summary":   "A test topic for validation",
 		"tags":      []string{"test", "validation"},
@@ -449,7 +451,7 @@ func (r *Router) testLexiconValidation() TestResult {
 		"createdAt": time.Now().Format(time.RFC3339),
 	}
 
-	if err := pds.ValidateLexicon(pds.TopicLexicon, validTopic); err != nil {
+	if err := lexicons.ValidateLexicon(lexicons.TopicLexicon, validTopic); err != nil {
 		return TestResult{
 			Operation: "validate_lexicons",
 			Success:   false,
@@ -460,13 +462,13 @@ func (r *Router) testLexiconValidation() TestResult {
 
 	// Test invalid topic record
 	invalidTopic := map[string]interface{}{
-		"$type":     pds.TopicLexicon,
+		"$type":     lexicons.TopicLexicon,
 		"summary":   "Missing required title field",
 		"createdBy": "did:plc:test123",
 		"createdAt": time.Now().Format(time.RFC3339),
 	}
 
-	if err := pds.ValidateLexicon(pds.TopicLexicon, invalidTopic); err == nil {
+	if err := lexicons.ValidateLexicon(lexicons.TopicLexicon, invalidTopic); err == nil {
 		return TestResult{
 			Operation: "validate_lexicons",
 			Success:   false,
@@ -485,7 +487,7 @@ func (r *Router) testLexiconValidation() TestResult {
 
 func (r *Router) testURIParsing() TestResult {
 	testURI := "at://did:plc:test123/quest.dis.topic/topic-123456789"
-	components, err := pds.ParseATUri(testURI)
+	components, err := xrpc.ParseATUri(testURI)
 	if err != nil {
 		return TestResult{
 			Operation: "test_uri_parsing",
@@ -514,15 +516,15 @@ func (r *Router) testURIParsing() TestResult {
 }
 
 func (r *Router) simulateCreateTopic(testDID string) TestResult {
-	params := pds.CreateTopicParams{
+	params := lexicons.CreateTopicParams{
 		Title:   "Simulated Test Topic",
 		Summary: "This is a test topic created via the dev interface",
 		Tags:    []string{"dev", "test", "simulation"},
 	}
 
 	// Create lexicon record
-	topicRecord := &pds.TopicRecord{
-		Type:      pds.TopicLexicon,
+	topicRecord := &lexicons.TopicRecord{
+		Type:      lexicons.TopicLexicon,
 		Title:     params.Title,
 		Summary:   params.Summary,
 		Tags:      params.Tags,
@@ -532,7 +534,7 @@ func (r *Router) simulateCreateTopic(testDID string) TestResult {
 
 	// Validate
 	recordData := topicRecord.ToMap()
-	if err := pds.ValidateLexicon(pds.TopicLexicon, recordData); err != nil {
+	if err := lexicons.ValidateLexicon(lexicons.TopicLexicon, recordData); err != nil {
 		return TestResult{
 			Operation: "simulate_create_topic",
 			Success:   false,
@@ -542,8 +544,8 @@ func (r *Router) simulateCreateTopic(testDID string) TestResult {
 	}
 
 	// Generate realistic URIs
-	rkey := pds.GenerateRKey("topic")
-	uri := fmt.Sprintf("at://%s/%s/%s", testDID, pds.TopicLexicon, rkey)
+	rkey := lexicons.GenerateRKey("topic")
+	uri := fmt.Sprintf("at://%s/%s/%s", testDID, lexicons.TopicLexicon, rkey)
 	cid := fmt.Sprintf("bafyrei%d", time.Now().UnixNano()%1000000)
 
 	topic := topicRecord.ToTopic(uri, cid)
@@ -557,7 +559,7 @@ func (r *Router) simulateCreateTopic(testDID string) TestResult {
 }
 
 func (r *Router) simulateGetTopic(uri string) TestResult {
-	components, err := pds.ParseATUri(uri)
+	components, err := xrpc.ParseATUri(uri)
 	if err != nil {
 		return TestResult{
 			Operation: "simulate_get_topic",
@@ -567,18 +569,18 @@ func (r *Router) simulateGetTopic(uri string) TestResult {
 		}
 	}
 
-	if components.Collection != pds.TopicLexicon {
+	if components.Collection != lexicons.TopicLexicon {
 		return TestResult{
 			Operation: "simulate_get_topic",
 			Success:   false,
 			Message:   "URI is not a topic record",
-			Details:   fmt.Sprintf("Expected %s, got %s", pds.TopicLexicon, components.Collection),
+			Details:   fmt.Sprintf("Expected %s, got %s", lexicons.TopicLexicon, components.Collection),
 		}
 	}
 
 	// Simulate found topic
-	topicRecord := &pds.TopicRecord{
-		Type:      pds.TopicLexicon,
+	topicRecord := &lexicons.TopicRecord{
+		Type:      lexicons.TopicLexicon,
 		Title:     "Retrieved Test Topic",
 		Summary:   "This topic was simulated for retrieval testing",
 		Tags:      []string{"retrieved", "test"},
@@ -599,10 +601,10 @@ func (r *Router) simulateGetTopic(uri string) TestResult {
 
 func (r *Router) testRealPDSStructure(testDID string) TestResult {
 	// Test what the real PDS service would do (without making actual calls)
-	atprotoService := pds.NewATProtoService()
+	atprotoService := lexicons.NewATProtoService()
 
 	// Test structure without network calls
-	params := pds.CreateTopicParams{
+	params := lexicons.CreateTopicParams{
 		Title:   "Real PDS Structure Test",
 		Summary: "Testing the structure that would be sent to real PDS",
 		Tags:    []string{"real", "structure", "test"},
@@ -648,12 +650,12 @@ func containsStringHelper(s, substr string) bool {
 // browseRealPDS attempts to browse the user's actual PDS for quest.dis.* records
 func (r *Router) browseRealPDS(userDID string) TestResult {
 	// Use the real XRPC client to list records
-	xrpcClient := pds.NewXRPCClient()
+	xrpcClient := lexicons.NewXRPCClient()
 
 	// Try to list quest.dis.topic records
 	ctx := context.Background()
 	// Note: This will likely fail due to no access token, but we can see the structure
-	response, err := xrpcClient.ListRecords(ctx, userDID, pds.TopicLexicon, 10, "", "")
+	response, err := xrpcClient.ListRecords(ctx, userDID, lexicons.TopicLexicon, 10, "", "", nil)
 
 	if err != nil {
 		return TestResult{
@@ -675,7 +677,7 @@ func (r *Router) browseRealPDS(userDID string) TestResult {
 // listPDSTopics lists topics from the user's PDS using authenticated session
 func (r *Router) listPDSTopics(req *http.Request, userDID string) TestResult {
 	// Extract access token from session
-	accessToken, err := auth.GetSessionCookie(req)
+	accessToken, err := web.GetSessionCookie(req)
 	if err != nil {
 		return TestResult{
 			Operation: "list_pds_topics",
@@ -686,7 +688,7 @@ func (r *Router) listPDSTopics(req *http.Request, userDID string) TestResult {
 	}
 
 	// Extract DPoP key from session
-	dpopKey, err := auth.GetDPoPKeyFromCookie(req)
+	dpopKey, err := oauth.GetDPoPKeyFromCookie(req)
 	if err != nil {
 		return TestResult{
 			Operation: "list_pds_topics",
@@ -697,11 +699,11 @@ func (r *Router) listPDSTopics(req *http.Request, userDID string) TestResult {
 	}
 
 	// Use the real XRPC client to list records
-	xrpcClient := pds.NewXRPCClient()
+	xrpcClient := lexicons.NewXRPCClient()
 	ctx := context.Background()
 
 	// Try to list quest.dis.topic records
-	response, err := xrpcClient.ListRecordsWithDPoP(ctx, userDID, pds.TopicLexicon, 50, "", "", accessToken, dpopKey)
+	response, err := xrpcClient.ListRecords(ctx, userDID, lexicons.TopicLexicon, 50, "", accessToken, dpopKey)
 	if err != nil {
 		return TestResult{
 			Operation: "list_pds_topics",
@@ -734,7 +736,11 @@ func (r *Router) listPDSTopics(req *http.Request, userDID string) TestResult {
 
 	for _, record := range response.Records {
 		// Parse the record to get topic details
-		topicData := record.Value
+		topicData, ok := record.Value.(map[string]interface{})
+		if !ok {
+			continue // Skip malformed records
+		}
+		
 		title := "Unknown"
 		if t, exists := topicData["title"].(string); exists {
 			title = t
@@ -815,7 +821,7 @@ func (r *Router) getPDSRecord(uri string) TestResult {
 	}
 
 	// Parse the URI
-	components, err := pds.ParseATUri(uri)
+	components, err := xrpc.ParseATUri(uri)
 	if err != nil {
 		return TestResult{
 			Operation: "get_pds_record",
@@ -826,10 +832,11 @@ func (r *Router) getPDSRecord(uri string) TestResult {
 	}
 
 	// Try to get the record (will fail without auth, but shows structure)
-	xrpcClient := pds.NewXRPCClient()
+	xrpcClient := lexicons.NewXRPCClient()
 	ctx := context.Background()
 
-	_, err = xrpcClient.GetRecord(ctx, components.DID, components.Collection, components.RKey, "")
+	var result map[string]interface{}
+	err = xrpcClient.GetRecord(ctx, components.DID, components.Collection, components.RKey, &result, "", nil)
 
 	return TestResult{
 		Operation: "get_pds_record",
@@ -876,7 +883,7 @@ func (r *Router) createRandomTopic(req *http.Request, userDID string) TestResult
 	uniqueTopic := fmt.Sprintf("%s [%s]", randomTopic, time.Now().Format("15:04:05"))
 
 	// Extract access token from session
-	accessToken, err := auth.GetSessionCookie(req)
+	accessToken, err := web.GetSessionCookie(req)
 	if err != nil {
 		return TestResult{
 			Operation: "create_random_topic",
@@ -887,7 +894,7 @@ func (r *Router) createRandomTopic(req *http.Request, userDID string) TestResult
 	}
 
 	// Extract DPoP key from session (required for ATProtocol OAuth)
-	dpopKey, err := auth.GetDPoPKeyFromCookie(req)
+	dpopKey, err := oauth.GetDPoPKeyFromCookie(req)
 	if err != nil {
 		logger.Error("Failed to get DPoP key from cookie", "error", err)
 		return TestResult{
@@ -939,23 +946,14 @@ func (r *Router) createRandomTopic(req *http.Request, userDID string) TestResult
 	}
 
 	// Create the topic using our PDS service
-	params := pds.CreateTopicParams{
+	params := lexicons.CreateTopicParams{
 		Title:   uniqueTopic,
 		Summary: randomMessage,
 		Tags:    randomTags,
 	}
 
-	// Cast to ATProtoService to access token-aware methods
-	atprotoService, ok := r.pdsService.(*pds.ATProtoService)
-	if !ok {
-		logger.Error("PDS service is not ATProtocol service", "actualType", fmt.Sprintf("%T", r.pdsService))
-		return TestResult{
-			Operation: "create_random_topic",
-			Success:   false,
-			Message:   "PDS service is not ATProtocol service",
-			Details:   "This operation requires the real ATProtocol PDS service",
-		}
-	}
+	// Use the PDS service directly (it's already the correct type)
+	atprotoService := r.pdsService
 
 	logger.Info("About to call CreateTopicWithDPoP",
 		"userDID", userDID,
@@ -964,7 +962,8 @@ func (r *Router) createRandomTopic(req *http.Request, userDID string) TestResult
 		"dpopKeyType", fmt.Sprintf("%T", dpopKey))
 
 	// Use the real ATProtocol service with access token and DPoP key
-	topic, err := atprotoService.CreateTopicWithDPoP(userDID, params, accessToken, dpopKey)
+	// Note: The legacy method expects pdsEndpoint as first param, but we use userDID
+	topic, err := atprotoService.CreateTopicWithAuth(context.Background(), userDID, accessToken, dpopKey, userDID, params)
 
 	logger.Info("CreateTopicWithDPoP completed", "hasError", err != nil)
 	if err != nil {
@@ -1000,7 +999,7 @@ func (r *Router) createRandomTopic(req *http.Request, userDID string) TestResult
 // testStandardPost creates a standard app.bsky.feed.post to test our DPoP implementation
 func (r *Router) testStandardPost(req *http.Request, userDID string) TestResult {
 	// Extract access token from session
-	accessToken, err := auth.GetSessionCookie(req)
+	accessToken, err := web.GetSessionCookie(req)
 	if err != nil {
 		return TestResult{
 			Operation: "test_standard_post",
@@ -1011,7 +1010,7 @@ func (r *Router) testStandardPost(req *http.Request, userDID string) TestResult 
 	}
 
 	// Extract DPoP key from session
-	dpopKey, err := auth.GetDPoPKeyFromCookie(req)
+	dpopKey, err := oauth.GetDPoPKeyFromCookie(req)
 	if err != nil {
 		return TestResult{
 			Operation: "test_standard_post",
@@ -1031,10 +1030,10 @@ func (r *Router) testStandardPost(req *http.Request, userDID string) TestResult 
 	}
 
 	// Generate unique rkey
-	rkey := pds.GenerateRKey("post")
+	rkey := lexicons.GenerateRKey("post")
 
 	// Create XRPC request
-	createReq := pds.CreateRecordRequest{
+	createReq := lexicons.CreateRecordRequest{
 		Repo:       userDID,
 		Collection: "app.bsky.feed.post",
 		RKey:       rkey,
@@ -1043,7 +1042,7 @@ func (r *Router) testStandardPost(req *http.Request, userDID string) TestResult 
 	}
 
 	// Use XRPC client directly
-	xrpcClient := pds.NewXRPCClient()
+	xrpcClient := lexicons.NewXRPCClient()
 	ctx := context.Background()
 
 	// Debug: Check token scopes again for this specific operation
@@ -1071,7 +1070,7 @@ func (r *Router) testStandardPost(req *http.Request, userDID string) TestResult 
 	}
 
 	// Calculate JWK thumbprint of our DPoP key
-	keyPair := &auth.DPoPKeyPair{PrivateKey: dpopKey}
+	keyPair := &oauth.DPoPKeyPair{PrivateKey: dpopKey}
 	jwk := keyPair.PublicJWK()
 	logger.Info("Our DPoP key JWK", "jwk", jwk)
 
@@ -1088,7 +1087,7 @@ func (r *Router) testStandardPost(req *http.Request, userDID string) TestResult 
 
 	logger.Info("Testing standard post creation", "userDID", userDID, "text", postText)
 
-	resp, err := xrpcClient.CreateRecordWithDPoP(ctx, createReq, accessToken, dpopKey)
+	resp, err := xrpcClient.CreateRecord(ctx, createReq.Repo, createReq.Collection, createReq.RKey, createReq.Record, accessToken, dpopKey)
 	if err != nil {
 		// Log the full error for debugging
 		logger.Error("Standard post creation failed with detailed error", "error", err, "userDID", userDID, "postText", postText)
@@ -1181,7 +1180,7 @@ func (r *Router) createTopicFromModal(req *http.Request, userDID string, parsedD
 	}
 
 	// Extract access token and DPoP key
-	accessToken, err := auth.GetSessionCookie(req)
+	accessToken, err := web.GetSessionCookie(req)
 	if err != nil {
 		return TestResult{
 			Operation: "create_topic_modal",
@@ -1191,7 +1190,7 @@ func (r *Router) createTopicFromModal(req *http.Request, userDID string, parsedD
 		}
 	}
 
-	dpopKey, err := auth.GetDPoPKeyFromCookie(req)
+	dpopKey, err := oauth.GetDPoPKeyFromCookie(req)
 	if err != nil {
 		return TestResult{
 			Operation: "create_topic_modal",
@@ -1202,23 +1201,17 @@ func (r *Router) createTopicFromModal(req *http.Request, userDID string, parsedD
 	}
 
 	// Create the topic
-	params := pds.CreateTopicParams{
+	params := lexicons.CreateTopicParams{
 		Title:   newTopicTitle,
 		Summary: newTopicSummary,
 		Tags:    tagList,
 	}
 
-	atprotoService, ok := r.pdsService.(*pds.ATProtoService)
-	if !ok {
-		return TestResult{
-			Operation: "create_topic_modal",
-			Success:   false,
-			Message:   "PDS service not available",
-			Details:   "ATProtocol service required for topic creation",
-		}
-	}
+	// Use the PDS service directly (it's already the correct type)
+	atprotoService := r.pdsService
 
-	topic, err := atprotoService.CreateTopicWithDPoP(userDID, params, accessToken, dpopKey)
+	// Note: The legacy method expects pdsEndpoint as first param, but we use userDID
+	topic, err := atprotoService.CreateTopicWithAuth(context.Background(), userDID, accessToken, dpopKey, userDID, params)
 	if err != nil {
 		return TestResult{
 			Operation: "create_topic_modal",
@@ -1239,7 +1232,7 @@ func (r *Router) createTopicFromModal(req *http.Request, userDID string, parsedD
 // checkServerScopes checks what scopes the authorization server supports
 func (r *Router) checkServerScopes(_ string) TestResult {
 	// Discover the authorization server metadata
-	metadata, err := auth.DiscoverAuthorizationServer("ryeyam.bsky.social")
+	metadata, err := oauth.DiscoverAuthorizationServer("ryeyam.bsky.social")
 	if err != nil {
 		return TestResult{
 			Operation: "check_server_scopes",
@@ -1286,7 +1279,7 @@ func (r *Router) testNewPackage(req *http.Request, userDID string) TestResult {
 	logger.Info("Testing new ATProtocol package", "userDID", userDID)
 
 	// Extract existing authentication data from the current session
-	accessToken, err := auth.GetSessionCookie(req)
+	accessToken, err := web.GetSessionCookie(req)
 	if err != nil {
 		return TestResult{
 			Operation: "test_new_package",
@@ -1296,7 +1289,7 @@ func (r *Router) testNewPackage(req *http.Request, userDID string) TestResult {
 		}
 	}
 
-	dpopKey, err := auth.GetDPoPKeyFromCookie(req)
+	dpopKey, err := oauth.GetDPoPKeyFromCookie(req)
 	if err != nil {
 		return TestResult{
 			Operation: "test_new_package",

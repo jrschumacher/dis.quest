@@ -2,13 +2,15 @@
 package dotwellknown
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
 
-	"github.com/jrschumacher/dis.quest/internal/auth"
 	"github.com/jrschumacher/dis.quest/internal/config"
 	"github.com/jrschumacher/dis.quest/internal/svrlib"
+	"github.com/jrschumacher/dis.quest/pkg/atproto/oauth"
 	"golang.org/x/oauth2"
 )
 
@@ -88,8 +90,8 @@ func (rt *WellKnownRouter) RedirectHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Use PKCE and state helpers from internal/auth
-	state := auth.GenerateStateToken()
-	codeVerifier, codeChallenge, err := auth.GeneratePKCE()
+	state := generateStateToken()
+	codeVerifier, codeChallenge, err := oauth.GeneratePKCE()
 	if err != nil {
 		http.Error(w, "failed to generate PKCE", http.StatusInternalServerError)
 		return
@@ -120,13 +122,22 @@ func (rt *WellKnownRouter) RedirectHandler(w http.ResponseWriter, r *http.Reques
 	redirectURI := publicDomain + "/auth/callback"
 
 	// Get OAuth2 config with correct redirect URI
-	metadata, err := auth.DiscoverAuthorizationServer(handle)
+	metadata, err := oauth.DiscoverAuthorizationServer(handle)
 	if err != nil {
 		http.Error(w, "failed to discover authorization server", http.StatusInternalServerError)
 		return
 	}
 	cfg := rt.Config
-	conf := auth.OAuth2Config(metadata, cfg)
+	providerConfig := &oauth.ProviderConfig{
+		ClientID:       cfg.OAuthClientID,
+		ClientURI:      cfg.PublicDomain,
+		RedirectURI:    cfg.OAuthRedirectURL,
+		PDSEndpoint:    cfg.PDSEndpoint,
+		JWKSPrivateKey: cfg.JWKSPrivate,
+		JWKSPublicKey:  cfg.JWKSPublic,
+		Scope:          "atproto transition:generic",
+	}
+	conf := oauth.OAuth2Config(metadata, providerConfig)
 	conf.RedirectURL = redirectURI
 
 	// Generate auth URL with required parameters
@@ -137,4 +148,15 @@ func (rt *WellKnownRouter) RedirectHandler(w http.ResponseWriter, r *http.Reques
 	)
 
 	http.Redirect(w, r, authURL, http.StatusFound)
+}
+
+// generateStateToken generates a random state token for OAuth flows
+func generateStateToken() string {
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		// fallback: not cryptographically secure, but avoids panic
+		return base64.RawURLEncoding.EncodeToString([]byte("fallback_state_token"))
+	}
+	return base64.RawURLEncoding.EncodeToString(b)
 }

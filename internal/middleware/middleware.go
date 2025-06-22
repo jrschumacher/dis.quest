@@ -8,13 +8,13 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/jrschumacher/dis.quest/components"
-	"github.com/jrschumacher/dis.quest/internal/auth"
+	"github.com/jrschumacher/dis.quest/internal/web"
 )
 
 // AuthMiddleware checks for a valid session cookie and redirects to /login if missing
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, err := auth.GetSessionCookie(r)
+		_, err := web.GetSessionCookie(r)
 		if err != nil {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return

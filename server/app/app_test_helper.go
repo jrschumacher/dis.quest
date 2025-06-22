@@ -7,13 +7,13 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/config"
 	"github.com/jrschumacher/dis.quest/internal/db"
 	"github.com/jrschumacher/dis.quest/internal/middleware"
-	"github.com/jrschumacher/dis.quest/internal/pds"
+	"github.com/jrschumacher/dis.quest/internal/lexicons"
 )
 
 // RegisterTestRoutes registers routes with test middleware for testing
 func RegisterTestRoutes(mux *http.ServeMux, _ string, _ *config.Config, dbService *db.Service, testUserDID string) *Router {
 	// Create a mock PDS service for integration tests
-	pdsService := pds.NewMockService()
+	pdsService := lexicons.NewMockService()
 	
 	router := &Router{
 		Router:     nil, // We don't need the full router for tests

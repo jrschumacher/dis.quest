@@ -1,12 +1,13 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
+	"time"
 
-	"github.com/jrschumacher/dis.quest/internal/auth"
+	"github.com/jrschumacher/dis.quest/internal/web"
 	"github.com/jrschumacher/dis.quest/internal/logger"
 	"github.com/jrschumacher/dis.quest/pkg/atproto"
+	"github.com/jrschumacher/dis.quest/pkg/atproto/jwt"
 )
 
 // TokenRefreshMiddleware automatically refreshes access tokens when they're close to expiring
@@ -14,7 +15,7 @@ func TokenRefreshMiddleware(atprotoClient *atproto.Client) func(http.Handler) ht
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Only refresh tokens for authenticated requests
-			accessToken, err := auth.GetSessionCookie(r)
+			accessToken, err := web.GetSessionCookie(r)
 			if err != nil {
 				// No access token, skip refresh
 				next.ServeHTTP(w, r)
@@ -22,8 +23,9 @@ func TokenRefreshMiddleware(atprotoClient *atproto.Client) func(http.Handler) ht
 			}
 
 			// Check if token is expiring within 5 minutes
-			if !auth.IsTokenExpiringSoon(accessToken, 5) {
-				// Token is still valid, continue
+			timeUntilExpiry, err := jwt.TimeUntilExpiry(accessToken)
+			if err != nil || timeUntilExpiry > 5*time.Minute {
+				// Token is still valid or we can't parse it, continue
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -31,55 +33,21 @@ func TokenRefreshMiddleware(atprotoClient *atproto.Client) func(http.Handler) ht
 			logger.Info("Access token expiring soon, attempting refresh")
 
 			// Check if refresh token is available
-			_, err = auth.GetRefreshTokenCookie(r)
+			_, err = web.GetRefreshTokenCookie(r)
 			if err != nil {
 				logger.Error("No refresh token available", "error", err)
 				// Clear session and redirect to login
-				auth.ClearSessionCookie(w)
+				web.ClearSessionCookie(w)
 				http.Redirect(w, r, "/login", http.StatusFound)
 				return
 			}
 
-			// Load the current session and attempt to refresh it directly
-			sessionWrapper, err := auth.LoadSessionFromCookies(r)
-			if err != nil {
-				logger.Error("Failed to load session for refresh", "error", err)
-				auth.ClearSessionCookie(w)
-				http.Redirect(w, r, "/login", http.StatusFound)
-				return
-			}
-
-			// If we have an atproto session, try to refresh it
-			if atprotoSession := sessionWrapper.GetAtprotoSession(); atprotoSession != nil {
-				ctx := context.WithValue(r.Context(), "http_request", r)
-				if err := atprotoSession.Refresh(ctx); err != nil {
-					logger.Error("Failed to refresh atproto session", "error", err)
-					auth.ClearSessionCookie(w)
-					http.Redirect(w, r, "/login", http.StatusFound)
-					return
-				}
-				logger.Info("ATProtocol session refreshed", "userDID", atprotoSession.GetUserDID())
-			} else {
-				// Legacy refresh not supported - redirect to login
-				logger.Warn("Legacy session refresh not supported, redirecting to login")
-				auth.ClearSessionCookie(w)
-				http.Redirect(w, r, "/login", http.StatusFound)
-				return
-			}
-
-			// Save refreshed session to cookies using the wrapper
-			if err := sessionWrapper.SaveToCookies(w, false); err != nil {
-				logger.Error("Failed to save refreshed session to cookies", "error", err)
-				// Fall back to clearing session
-				auth.ClearSessionCookie(w)
-				http.Redirect(w, r, "/login", http.StatusFound)
-				return
-			}
-
-			logger.Info("Token refresh successful with enhanced session wrapper")
-
-			// Continue with the refreshed token
-			next.ServeHTTP(w, r)
+			// For now, redirect to login when token refresh is needed
+			// TODO: Implement proper token refresh with ATProtocol session manager
+			logger.Info("Token refresh needed, redirecting to login")
+			web.ClearSessionCookie(w)
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
 		})
 	}
 }

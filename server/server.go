@@ -9,7 +9,7 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/db"
 	"github.com/jrschumacher/dis.quest/internal/logger"
 	"github.com/jrschumacher/dis.quest/pkg/atproto"
-	"github.com/jrschumacher/dis.quest/internal/pds"
+	"github.com/jrschumacher/dis.quest/internal/lexicons"
 	apphandlers "github.com/jrschumacher/dis.quest/server/app"
 	authhandlers "github.com/jrschumacher/dis.quest/server/auth-handlers"
 	wellknownhandlers "github.com/jrschumacher/dis.quest/server/dot-well-known-handlers"
@@ -66,7 +66,7 @@ func Start(cfg *config.Config) {
 	}
 
 	// Initialize PDS service (real ATProtocol implementation)
-	pdsService := pds.NewATProtoService()
+	pdsService := lexicons.NewLegacyPDSService()
 
 	mux := http.NewServeMux()
 

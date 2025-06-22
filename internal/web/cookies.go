@@ -1,6 +1,5 @@
-// Package auth provides web application authentication utilities 
-// Core ATProtocol functionality is now in pkg/atproto
-package auth
+// Package web provides HTTP-specific utilities for ATProtocol web applications
+package web
 
 import (
 	"net/http"
@@ -8,7 +7,7 @@ import (
 	"github.com/jrschumacher/dis.quest/pkg/atproto/oauth"
 )
 
-// Session utilities
+// Session cookie management
 const (
 	sessionCookieName      = "dsq_session"
 	refreshTokenCookieName = "dsq_refresh"

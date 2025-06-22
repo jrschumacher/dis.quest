@@ -9,7 +9,7 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/logger"
 	"github.com/jrschumacher/dis.quest/internal/middleware"
 	"github.com/jrschumacher/dis.quest/pkg/atproto"
-	"github.com/jrschumacher/dis.quest/internal/pds"
+	"github.com/jrschumacher/dis.quest/internal/lexicons"
 	"github.com/jrschumacher/dis.quest/internal/svrlib"
 )
 
@@ -17,11 +17,11 @@ import (
 type Router struct {
 	*svrlib.Router
 	dbService  *db.Service  
-	pdsService pds.Service
+	pdsService *lexicons.LegacyPDSService
 }
 
 // RegisterRoutes registers all application routes and returns a Router
-func RegisterRoutes(mux *http.ServeMux, _ string, cfg *config.Config, dbService *db.Service, pdsService pds.Service, atprotoClient *atproto.Client) *Router {
+func RegisterRoutes(mux *http.ServeMux, _ string, cfg *config.Config, dbService *db.Service, pdsService *lexicons.LegacyPDSService, atprotoClient *atproto.Client) *Router {
 	router := &Router{
 		Router:     svrlib.NewRouter(mux, "/", cfg),
 		dbService:  dbService,

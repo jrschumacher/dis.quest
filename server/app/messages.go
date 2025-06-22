@@ -11,7 +11,7 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/httputil"
 	"github.com/jrschumacher/dis.quest/internal/logger"
 	"github.com/jrschumacher/dis.quest/internal/middleware"
-	"github.com/jrschumacher/dis.quest/internal/pds"
+	"github.com/jrschumacher/dis.quest/internal/lexicons"
 	"github.com/jrschumacher/dis.quest/internal/validation"
 )
 
@@ -107,7 +107,7 @@ func (r *Router) createMessageAPI(w http.ResponseWriter, req *http.Request, topi
 	}
 
 	// Create message in user's PDS
-	pdsMessage, err := r.pdsService.CreateMessage(userCtx.DID, pds.CreateMessageParams{
+	pdsMessage, err := r.pdsService.CreateMessage(userCtx.DID, lexicons.CreateMessageParams{
 		Topic:   topicURI,
 		Content: createReq.Content,
 		ReplyTo: createReq.ParentMessageRkey,
