@@ -16,22 +16,21 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/auth"
 	"github.com/jrschumacher/dis.quest/internal/config"
 	"github.com/jrschumacher/dis.quest/internal/logger"
-	"github.com/jrschumacher/dis.quest/internal/oauth"
-	"github.com/jrschumacher/dis.quest/internal/svrlib"
 	"github.com/jrschumacher/dis.quest/pkg/atproto"
+	"github.com/jrschumacher/dis.quest/internal/svrlib"
 )
 
 // Router handles authentication-related HTTP routes
 type Router struct {
 	*svrlib.Router
-	oauthService *oauth.Service
+	atprotoClient *atproto.Client
 }
 
 // RegisterRoutes registers all /auth/* routes on the given mux, with the prefix handled by the caller.
-func RegisterRoutes(mux *http.ServeMux, prefix string, cfg *config.Config, oauthService *oauth.Service) {
+func RegisterRoutes(mux *http.ServeMux, prefix string, cfg *config.Config, atprotoClient *atproto.Client) {
 	router := &Router{
 		Router:       svrlib.NewRouter(mux, prefix, cfg),
-		oauthService: oauthService,
+		atprotoClient: atprotoClient,
 	}
 	// Pass config to handlers for env-aware cookie security
 	routerConfig := cfg
@@ -220,8 +219,18 @@ func (rt *Router) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 		parEndpoint = strings.TrimSuffix(metadata.Issuer, "/") + "/oauth/par"
 	}
 	
-	// Perform PAR request
-	parResp, err := parClient.PerformPAR(r.Context(), parEndpoint, metadata, codeVerifier, state, dpopKey.PrivateKey, cfg)
+	// Perform PAR request - convert types for compatibility
+	dpopKeyPair := auth.DPoPKeyPair{PrivateKey: dpopKey.PrivateKey}
+	providerConfig := &auth.ProviderConfig{
+		ClientID:       cfg.OAuthClientID,
+		ClientURI:      cfg.PublicDomain,
+		RedirectURI:    cfg.OAuthRedirectURL,
+		PDSEndpoint:    cfg.PDSEndpoint,
+		JWKSPrivateKey: cfg.JWKSPrivate,
+		JWKSPublicKey:  cfg.JWKSPublic,
+		Scope:          "atproto transition:generic",
+	}
+	parResp, err := parClient.PerformPAR(r.Context(), parEndpoint, metadata, codeVerifier, state, dpopKeyPair, providerConfig)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to perform PAR request", "handle", handle, "error", err)
 		return
@@ -295,46 +304,33 @@ func (rt *Router) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	// Note: DPoP key management is now handled by the OAuth provider
 	cfg := rt.Config
 	
-	// Create OAuth service with configured provider
-	oauthService, err := oauth.NewService(cfg)
-	if err != nil {
-		logger.Error("Failed to create OAuth service", "handle", handle, "error", err)
-		writeError(w, http.StatusInternalServerError, "OAuth service initialization failed", "handle", handle, "error", err)
-		return
-	}
-	
-	logger.Info("Starting token exchange", "handle", handle, "code", code[:10]+"...", "provider", oauthService.GetProviderName())
+	logger.Info("Starting token exchange", "handle", handle, "code", code[:10]+"...")
 	// Inject HTTP request into context for provider access to cookies/session
 	ctxWithRequest := context.WithValue(ctx, "http_request", r)
-	tokenResult, err := oauthService.ExchangeToken(ctxWithRequest, code, verCookie.Value)
+	session, err := rt.atprotoClient.ExchangeCode(ctxWithRequest, code, verCookie.Value)
 	if err != nil {
-		logger.Error("Token exchange failed", "handle", handle, "error", err, "provider", oauthService.GetProviderName())
+		logger.Error("Token exchange failed", "handle", handle, "error", err)
 		writeError(w, http.StatusUnauthorized, "Token exchange failed", "handle", handle, "error", err)
 		return
 	}
-	logger.Info("Token exchange successful", "handle", handle, "provider", oauthService.GetProviderName())
+	logger.Info("Token exchange successful", "handle", handle, "userDID", session.GetUserDID())
 	
-	// Create enhanced session wrapper with pkg/atproto.Session integration
+	// Create SessionWrapper for backward compatibility with existing cookie management
 	sessionWrapper, err := auth.NewSessionWrapper(
-		tokenResult.AccessToken, 
-		tokenResult.RefreshToken, 
-		tokenResult.UserDID, 
-		tokenResult.DPoPKey, 
-		nil, // atproto client will be set if available in tokenResult
+		session.GetAccessToken(),
+		session.GetRefreshToken(), 
+		session.GetUserDID(),
+		session.GetDPoPKey(),
+		rt.atprotoClient,
 	)
 	if err != nil {
 		logger.Error("Failed to create session wrapper", "handle", handle, "error", err)
-		writeError(w, http.StatusInternalServerError, "Session creation failed", "handle", handle, "error", err)
+		writeError(w, http.StatusInternalServerError, "Session wrapper creation failed", "handle", handle, "error", err)
 		return
 	}
 	
-	// Set the atproto session if available from token result
-	if tokenResult.AtprotoSession != nil {
-		if atprotoSession, ok := tokenResult.AtprotoSession.(*atproto.Session); ok {
-			sessionWrapper.SetAtprotoSession(atprotoSession)
-			logger.Info("Enhanced session created with atproto.Session", "handle", handle, "userDID", tokenResult.UserDID)
-		}
-	}
+	// Set the internal atproto session
+	sessionWrapper.SetAtprotoSession(session)
 	
 	// Save session to cookies using the wrapper
 	if err := sessionWrapper.SaveToCookies(w, cfg.AppEnv == "development"); err != nil {

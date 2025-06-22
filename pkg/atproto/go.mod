@@ -2,7 +2,10 @@ module github.com/jrschumacher/dis.quest/pkg/atproto
 
 go 1.24.4
 
-require tangled.sh/icyphox.sh/atproto-oauth v0.0.0-20250526154904-3906c5336421
+require (
+	golang.org/x/oauth2 v0.30.0
+	tangled.sh/icyphox.sh/atproto-oauth v0.0.0-20250526154904-3906c5336421
+)
 
 require (
 	github.com/bluesky-social/indigo v0.0.0-20250301025210-a4e0cc37e188 // indirect

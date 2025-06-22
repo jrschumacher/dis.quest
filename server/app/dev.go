@@ -1310,6 +1310,7 @@ func (r *Router) testNewPackage(req *http.Request, userDID string) TestResult {
 	config := atproto.Config{
 		ClientID:       r.Config.OAuthClientID,
 		RedirectURI:    r.Config.OAuthRedirectURL,
+		PDSEndpoint:    r.Config.PDSEndpoint,
 		JWKSPrivateKey: r.Config.JWKSPrivate,
 		Scope:          "atproto transition:generic",
 	}

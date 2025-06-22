@@ -8,7 +8,7 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/db"
 	"github.com/jrschumacher/dis.quest/internal/logger"
 	"github.com/jrschumacher/dis.quest/internal/middleware"
-	"github.com/jrschumacher/dis.quest/internal/oauth"
+	"github.com/jrschumacher/dis.quest/pkg/atproto"
 	"github.com/jrschumacher/dis.quest/internal/pds"
 	"github.com/jrschumacher/dis.quest/internal/svrlib"
 )
@@ -21,18 +21,16 @@ type Router struct {
 }
 
 // RegisterRoutes registers all application routes and returns a Router
-func RegisterRoutes(mux *http.ServeMux, _ string, cfg *config.Config, dbService *db.Service, pdsService pds.Service) *Router {
+func RegisterRoutes(mux *http.ServeMux, _ string, cfg *config.Config, dbService *db.Service, pdsService pds.Service, atprotoClient *atproto.Client) *Router {
 	router := &Router{
 		Router:     svrlib.NewRouter(mux, "/", cfg),
 		dbService:  dbService,
 		pdsService: pdsService,
 	}
 
-	// Create OAuth service for token refresh
-	oauthService, err := oauth.NewService(cfg)
-	if err != nil {
-		// Log error but don't fail startup - token refresh will be disabled
-		logger.Error("Failed to create OAuth service for token refresh", "error", err)
+	// Use passed atproto client for token refresh
+	if atprotoClient == nil {
+		logger.Error("ATProtocol client is nil - token refresh will be disabled")
 	}
 
 	// Create route groups
@@ -42,8 +40,8 @@ func RegisterRoutes(mux *http.ServeMux, _ string, cfg *config.Config, dbService 
 
 	// Create protected routes with automatic token refresh
 	var protectedWithRefresh *middleware.RouteGroup
-	if oauthService != nil {
-		protectedWithRefresh = middleware.AutoRefreshGroup(mux, oauthService,
+	if atprotoClient != nil {
+		protectedWithRefresh = middleware.AutoRefreshGroup(mux, atprotoClient,
 			middleware.UserContextMiddleware,
 			middleware.AuthMiddleware,
 			middleware.LayoutMiddleware(cfg.AppEnv),
@@ -69,8 +67,8 @@ func RegisterRoutes(mux *http.ServeMux, _ string, cfg *config.Config, dbService 
 
 	// Protected API routes with auto token refresh
 	var protectedAPIWithRefresh *middleware.RouteGroup
-	if oauthService != nil {
-		protectedAPIWithRefresh = middleware.AutoRefreshGroup(mux, oauthService,
+	if atprotoClient != nil {
+		protectedAPIWithRefresh = middleware.AutoRefreshGroup(mux, atprotoClient,
 			middleware.UserContextMiddleware,
 			middleware.AuthMiddleware,
 		)
@@ -90,9 +88,9 @@ func RegisterRoutes(mux *http.ServeMux, _ string, cfg *config.Config, dbService 
 	// Development routes (only in development) with auto token refresh
 	if cfg.AppEnv == "development" {
 		pagesWithContext.HandleFunc("/dev/pds", router.DevPDSHandler)
-		if oauthService != nil {
+		if atprotoClient != nil {
 			// Use auto-refresh for PDS test operations since they use tokens
-			devAPIWithRefresh := middleware.AutoRefreshGroup(mux, oauthService)
+			devAPIWithRefresh := middleware.AutoRefreshGroup(mux, atprotoClient)
 			devAPIWithRefresh.HandleFunc("/dev/pds/test", router.DevPDSTestHandler)
 		} else {
 			raw.HandleFunc("/dev/pds/test", router.DevPDSTestHandler)

@@ -6,12 +6,11 @@ import (
 
 	"github.com/jrschumacher/dis.quest/internal/auth"
 	"github.com/jrschumacher/dis.quest/internal/logger"
-	"github.com/jrschumacher/dis.quest/internal/oauth"
 	"github.com/jrschumacher/dis.quest/pkg/atproto"
 )
 
 // TokenRefreshMiddleware automatically refreshes access tokens when they're close to expiring
-func TokenRefreshMiddleware(oauthService *oauth.Service) func(http.Handler) http.Handler {
+func TokenRefreshMiddleware(atprotoClient *atproto.Client) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Only refresh tokens for authenticated requests
@@ -31,8 +30,8 @@ func TokenRefreshMiddleware(oauthService *oauth.Service) func(http.Handler) http
 
 			logger.Info("Access token expiring soon, attempting refresh")
 
-			// Get refresh token
-			refreshToken, err := auth.GetRefreshTokenCookie(r)
+			// Check if refresh token is available
+			_, err = auth.GetRefreshTokenCookie(r)
 			if err != nil {
 				logger.Error("No refresh token available", "error", err)
 				// Clear session and redirect to login
@@ -41,39 +40,31 @@ func TokenRefreshMiddleware(oauthService *oauth.Service) func(http.Handler) http
 				return
 			}
 
-			// Perform token refresh
-			ctx := context.WithValue(r.Context(), "http_request", r)
-			tokenResult, err := oauthService.RefreshToken(ctx, refreshToken)
+			// Load the current session and attempt to refresh it directly
+			sessionWrapper, err := auth.LoadSessionFromCookies(r)
 			if err != nil {
-				logger.Error("Token refresh failed", "error", err)
-				// Clear session and redirect to login
+				logger.Error("Failed to load session for refresh", "error", err)
 				auth.ClearSessionCookie(w)
 				http.Redirect(w, r, "/login", http.StatusFound)
 				return
 			}
 
-			// Create enhanced session wrapper with refreshed tokens
-			sessionWrapper, err := auth.NewSessionWrapper(
-				tokenResult.AccessToken,
-				tokenResult.RefreshToken,
-				tokenResult.UserDID,
-				tokenResult.DPoPKey,
-				nil, // atproto client
-			)
-			if err != nil {
-				logger.Error("Failed to create session wrapper after refresh", "error", err)
-				// Fall back to clearing session
-				auth.ClearSessionCookie(w)
-				http.Redirect(w, r, "/login", http.StatusFound)
-				return
-			}
-
-			// Set the atproto session if available from token result
-			if tokenResult.AtprotoSession != nil {
-				if atprotoSession, ok := tokenResult.AtprotoSession.(*atproto.Session); ok {
-					sessionWrapper.SetAtprotoSession(atprotoSession)
+			// If we have an atproto session, try to refresh it
+			if atprotoSession := sessionWrapper.GetAtprotoSession(); atprotoSession != nil {
+				ctx := context.WithValue(r.Context(), "http_request", r)
+				if err := atprotoSession.Refresh(ctx); err != nil {
+					logger.Error("Failed to refresh atproto session", "error", err)
+					auth.ClearSessionCookie(w)
+					http.Redirect(w, r, "/login", http.StatusFound)
+					return
 				}
-				logger.Info("Enhanced session refreshed with atproto.Session", "userDID", tokenResult.UserDID)
+				logger.Info("ATProtocol session refreshed", "userDID", atprotoSession.GetUserDID())
+			} else {
+				// Legacy refresh not supported - redirect to login
+				logger.Warn("Legacy session refresh not supported, redirecting to login")
+				auth.ClearSessionCookie(w)
+				http.Redirect(w, r, "/login", http.StatusFound)
+				return
 			}
 
 			// Save refreshed session to cookies using the wrapper
@@ -94,8 +85,8 @@ func TokenRefreshMiddleware(oauthService *oauth.Service) func(http.Handler) http
 }
 
 // AutoRefreshGroup creates a middleware group that includes token refresh
-func AutoRefreshGroup(mux *http.ServeMux, oauthService *oauth.Service, middlewares ...func(http.Handler) http.Handler) *RouteGroup {
+func AutoRefreshGroup(mux *http.ServeMux, atprotoClient *atproto.Client, middlewares ...func(http.Handler) http.Handler) *RouteGroup {
 	// Prepend token refresh middleware to the list
-	allMiddlewares := append([]func(http.Handler) http.Handler{TokenRefreshMiddleware(oauthService)}, middlewares...)
+	allMiddlewares := append([]func(http.Handler) http.Handler{TokenRefreshMiddleware(atprotoClient)}, middlewares...)
 	return NewRouteGroup(mux, allMiddlewares...)
 }

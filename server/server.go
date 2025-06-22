@@ -8,7 +8,7 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/config"
 	"github.com/jrschumacher/dis.quest/internal/db"
 	"github.com/jrschumacher/dis.quest/internal/logger"
-	"github.com/jrschumacher/dis.quest/internal/oauth"
+	"github.com/jrschumacher/dis.quest/pkg/atproto"
 	"github.com/jrschumacher/dis.quest/internal/pds"
 	apphandlers "github.com/jrschumacher/dis.quest/server/app"
 	authhandlers "github.com/jrschumacher/dis.quest/server/auth-handlers"
@@ -48,11 +48,21 @@ func Start(cfg *config.Config) {
 		}
 	}()
 
-	// Initialize OAuth service with configured provider
-	oauthService, err := oauth.NewService(cfg)
+	// Initialize ATProtocol client with configured provider
+	atprotoConfig := atproto.Config{
+		ClientID:       cfg.OAuthClientID,
+		ClientURI:      cfg.PublicDomain,
+		RedirectURI:    cfg.OAuthRedirectURL,
+		PDSEndpoint:    cfg.PDSEndpoint,
+		JWKSPrivateKey: cfg.JWKSPrivate,
+		JWKSPublicKey:  cfg.JWKSPublic,
+		Scope:          "atproto transition:generic",
+	}
+
+	atprotoClient, err := atproto.New(atprotoConfig)
 	if err != nil {
-		logger.Error("failed to initialize OAuth service", "error", err)
-		panic("failed to initialize OAuth service")
+		logger.Error("failed to initialize ATProtocol client", "error", err)
+		panic("failed to initialize ATProtocol client")
 	}
 
 	// Initialize PDS service (real ATProtocol implementation)
@@ -74,9 +84,9 @@ func Start(cfg *config.Config) {
 	})
 
 	wellknownhandlers.RegisterRoutes(mux, "/.well-known", cfg)
-	authhandlers.RegisterRoutes(mux, "/auth", cfg, oauthService)
+	authhandlers.RegisterRoutes(mux, "/auth", cfg, atprotoClient)
 	healthhandlers.RegisterRoutes(mux, "/health", cfg)
-	apphandlers.RegisterRoutes(mux, "/", cfg, dbService, pdsService)
+	apphandlers.RegisterRoutes(mux, "/", cfg, dbService, pdsService, atprotoClient)
 
 	// Secure headers middleware
 	handler := secureHeaders(mux)

@@ -71,13 +71,13 @@ internal/             # Web application concerns only
 
 **Result**: ✅ Single, production-tested DPoP implementation with zero breaking changes
 
-#### **1.2 Consolidate OAuth Providers**
-**Move to `pkg/atproto/oauth/`:**
-- `internal/auth/auth.go`: PKCE implementation and DPoP transport ✅
-- `internal/oauth/manual.go`: Manual OAuth provider implementation ✅
-- `internal/oauth/tangled.go`: Tangled OAuth provider implementation ✅
-- `internal/auth/discover.go`: Authorization server discovery ✅
-- `internal/auth/par.go`: PAR implementation ✅
+#### **1.2 Consolidate OAuth Providers** ✅ **COMPLETED**
+**Moved to `pkg/atproto/oauth/`:**
+- ✅ `internal/auth/auth.go`: PKCE implementation and DPoP transport → `pkce.go`
+- ✅ `internal/oauth/manual.go`: Manual OAuth provider implementation → `providers.go`
+- ✅ `internal/oauth/tangled.go`: Tangled OAuth provider implementation → `providers.go`
+- ✅ `internal/auth/discover.go`: Authorization server discovery → `discovery.go`
+- ✅ `internal/auth/par.go`: PAR implementation → `par.go`
 
 **Enhanced Client Interface:**
 ```go
@@ -99,14 +99,14 @@ func New(config Config, providerType ProviderType) (*Client, error) {
 }
 ```
 
-#### **1.3 Enhanced XRPC Client**
-**Move to `pkg/atproto/xrpc/`:**
-- `internal/pds/xrpc.go`: Nonce retry logic (lines 151-184) ✅
-- `internal/pds/lexicons.go`: Custom lexicon support ✅
-- Enhanced error handling and logging compatibility ✅
+#### **1.3 Enhanced XRPC Client** ✅ **COMPLETED**
+**Already in place:**
+- ✅ `pkg/atproto/xrpc/client.go`: Nonce retry logic already implemented (lines 163-194)
+- ✅ `internal/pds/xrpc.go`: Already acts as wrapper around pkg/atproto/xrpc
+- ✅ Enhanced error handling and logging compatibility working
 
-#### **1.4 Unified Session Management**
-**Enhanced `pkg/atproto/session.go`:**
+#### **1.4 Unified Session Management** ✅ **COMPLETED**
+**Enhanced `pkg/atproto/client.go`:**
 ```go
 type Session struct {
     client       *Client
@@ -130,19 +130,28 @@ type Session struct {
 }
 ```
 
-### **Phase 2: Internal Package Cleanup**
+### **Phase 2: Internal Package Cleanup** ✅ **MOSTLY COMPLETED**
 
-#### **2.1 Minimal `internal/auth/`**
-**Keep only web application concerns:**
-- HTTP cookie management (`SetSessionCookie*`, `GetSessionCookie`)
-- Web-specific secure cookie settings
-- Environment-specific configuration (dev vs prod)
+#### **2.1 Minimal `internal/auth/`** ✅ **COMPLETED**
+**Minimized to web application concerns only:**
+- ✅ HTTP cookie management (`SetSessionCookie*`, `GetSessionCookie`) → `auth_web.go`
+- ✅ SessionWrapper for backward compatibility → `session_wrapper.go`
+- ✅ Compatibility layer delegating to pkg/atproto → `compat.go`
+- ✅ Error definitions preserved → `errors.go`
+- ✅ All OAuth/DPoP/PKCE implementation moved to pkg/atproto
 
-#### **2.2 Remove `internal/oauth/`**
-- OAuth providers moved to `pkg/atproto/oauth/`
-- Keep only minimal factory if needed for config-based selection
+#### **2.2 Remove `internal/oauth/`** ✅ **COMPLETED**
+**OAuth providers successfully migrated and flattened:**
+- ✅ OAuth providers moved to `pkg/atproto/oauth/providers.go`
+- ✅ ~~Minimal compatibility service created → `service.go`~~ **FLATTENED**
+- ✅ Direct `pkg/atproto.Client` usage replaces `internal/oauth.Service`
+- ✅ Provider selection simplified to manual (tangled + manual flattened)
+- ✅ All application code updated to use `*atproto.Client` directly
+- ✅ Middleware updated to work with `*atproto.Client`
+- ✅ Authentication handlers updated to use direct client
+- ✅ `/internal/oauth/` directory completely removed
 
-#### **2.3 Minimal `internal/pds/`**
+#### **2.3 Minimal `internal/pds/`** ⏳ **PENDING**
 - Keep application service interfaces
 - Remove XRPC wrapper (use `pkg/atproto` directly)
 - Keep mock implementations for testing
@@ -207,29 +216,189 @@ func AuthMiddleware(client *atproto.Client) func(http.Handler) http.Handler {
 
 ## Implementation Timeline
 
-### **Week 1: Core Consolidation**
+### **✅ CURRENT STATUS (2025-06-22)**
+**Phases 1 & 2 are COMPLETED**: Core ATProtocol consolidation and internal package cleanup are done. The only remaining task in Phase 2 is simplifying `internal/pds/`. We have successfully:
+
+- ✅ **Consolidated all ATProtocol functionality** into `pkg/atproto/`
+- ✅ **Flattened OAuth architecture** - removed wrapper services, direct client usage
+- ✅ **Minimized internal packages** to web-only concerns (cookies, middleware)
+- ✅ **Unified session management** with backward-compatible SessionWrapper
+- ✅ **Updated all application code** to use `pkg/atproto` directly
+
+**Next**: Implement Phase 3 (Universal Session Management Abstraction) which will make Phase 2.3 (`internal/pds/` simplification) much cleaner and provide a complete reusable ATProtocol SDK
+
+### **Week 1: Core Consolidation** ✅ **COMPLETED**
 - [x] **COMPLETED**: Move DPoP implementation to `pkg/atproto/oauth/dpop.go` ✅
-- [ ] Move OAuth providers to `pkg/atproto/oauth/`
-- [ ] Enhance XRPC client with nonce retry logic
-- [ ] Create unified client interface
+- [x] **COMPLETED**: Move OAuth providers to `pkg/atproto/oauth/` ✅
+- [x] **COMPLETED**: Enhanced XRPC client with nonce retry logic ✅
+- [x] **COMPLETED**: Create unified client interface ✅
 
-### **Week 2: Session & XRPC Enhancement** 
-- [ ] Unified session management with web integration
-- [ ] Enhanced XRPC client with all features
-- [ ] Move lexicon support to `pkg/atproto/lexicon/`
-- [ ] Update examples to show simplified usage
+### **Week 2: Internal Package Cleanup** ✅ **COMPLETED**
+- [x] **COMPLETED**: Minimize `internal/auth/` to web concerns only ✅
+- [x] **COMPLETED**: Remove `internal/oauth/` completely (flattened) ✅  
+- [x] **COMPLETED**: Update all application code to use `pkg/atproto` directly ✅
+- [x] **COMPLETED**: Flatten OAuth service layer for direct client usage ✅
+- [ ] **PENDING**: Simplify `internal/pds/` service interfaces
 
-### **Week 3: Internal Package Cleanup**
-- [ ] Minimize `internal/auth/` to web concerns only
-- [ ] Remove `internal/oauth/` (move to pkg/atproto)
-- [ ] Simplify `internal/pds/` service interfaces
-- [ ] Update all application code to use `pkg/atproto` directly
+### **Week 3: Universal Session Management Abstraction** ✅ **MOSTLY COMPLETED**
+- [x] **COMPLETED**: Deep analysis of internal/auth abstraction opportunities ✅
+- [x] **COMPLETED**: Create pkg/atproto/session/ package with generic interfaces ✅
+- [x] **COMPLETED**: Implement storage backends (Memory, Cookie, File) ✅
+- [x] **COMPLETED**: Update atproto.Client to use session manager ✅
+- [x] **COMPLETED**: Enhanced examples showing new session management ✅
+- [ ] **IN PROGRESS**: Refactor internal/auth to use new session system
+- [ ] **PENDING**: Move lexicon support to `pkg/atproto/lexicon/`
 
 ### **Week 4: Testing & Documentation**
 - [ ] Comprehensive testing of consolidated package
 - [ ] Update documentation and examples
 - [ ] Performance testing and optimization
 - [ ] Migration guide for other projects
+
+### **Phase 3: Universal Session Management Abstraction** 🚀 **NEW - IN PROGRESS**
+
+Based on deep analysis of `/internal/auth`, we identified a powerful abstraction opportunity. The current architecture mixes ATProtocol session semantics with web-specific transport concerns. By separating these, we can create a universal session management system.
+
+#### **3.1 Session Abstraction Architecture** ⏳ **IN PROGRESS**
+**Create generic session management layer in `pkg/atproto/session/`:**
+
+```go
+// Generic session operations (storage-agnostic)
+type Manager struct {
+    client  *atproto.Client
+    storage SessionStorage
+    config  Config
+}
+
+type SessionStorage interface {
+    Store(ctx context.Context, key string, data *SessionData) error
+    Load(ctx context.Context, key string) (*SessionData, error)
+    Delete(ctx context.Context, key string) error
+    Cleanup(ctx context.Context) error
+}
+
+// Built-in storage implementations
+type MemoryStorage struct{}      // Development/testing
+type CookieStorage struct{}      // Simple web apps
+type FileStorage struct{}        // CLI applications
+type RedisStorage struct{}       // Production web apps (extensible)
+```
+
+#### **3.2 Web Transport Layer Separation**
+**Keep HTTP-specific concerns in `internal/auth` as thin wrapper:**
+
+```go
+// internal/auth/web_session.go - delegates to pkg/atproto/session
+type WebSessionManager struct {
+    sessionManager *session.Manager
+    cookieConfig   CookieConfig
+}
+
+// HTTP-specific methods
+func (w *WebSessionManager) SaveToCookies(ctx context.Context, w http.ResponseWriter, session *atproto.Session) error
+func (w *WebSessionManager) LoadFromCookies(ctx context.Context, r *http.Request) (*atproto.Session, error)
+```
+
+### **Phase 4: Extensible Session Storage Interface** 🚀 **ENHANCED**
+
+The session abstraction enables pluggable storage backends for different application types:
+
+#### **4.1 Session Storage Interface Design**
+**Create pluggable session storage interface:**
+```go
+// SessionStorage defines the interface for session persistence
+type SessionStorage interface {
+    // Store saves a session with the given key
+    Store(ctx context.Context, key string, session *SessionData) error
+    
+    // Load retrieves a session by key
+    Load(ctx context.Context, key string) (*SessionData, error)
+    
+    // Delete removes a session
+    Delete(ctx context.Context, key string) error
+    
+    // Cleanup removes expired sessions (called periodically)
+    Cleanup(ctx context.Context) error
+}
+
+// SessionData contains the session information to be stored
+type SessionData struct {
+    AccessToken  string
+    RefreshToken string
+    UserDID      string
+    DPoPKey      *ecdsa.PrivateKey // Encrypted in storage
+    ExpiresAt    time.Time
+    CreatedAt    time.Time
+}
+```
+
+#### **4.2 Built-in Storage Implementations**
+**Default implementations provided:**
+- **CookieSessionStorage** (current implementation) - Default for simple apps
+- **MemorySessionStorage** - In-memory storage for development/testing
+- **EncryptedCookieStorage** - Cookie storage with AES encryption for DPoP keys
+
+#### **4.3 Enhanced Client Configuration**
+**Extended client to support custom session storage:**
+```go
+type Config struct {
+    ClientID       string
+    RedirectURI    string
+    PDSEndpoint    string
+    JWKSPrivateKey string
+    Scope          string
+    
+    // Optional: Custom session storage (defaults to cookies)
+    SessionStorage SessionStorage
+    
+    // Optional: Session encryption key for sensitive data
+    SessionEncryptionKey []byte
+}
+
+// New creates client with optional custom session storage
+func New(config Config, providerType ProviderType) (*Client, error) {
+    if config.SessionStorage == nil {
+        // Default to cookie-based storage
+        config.SessionStorage = NewCookieSessionStorage(config.SessionEncryptionKey)
+    }
+    // ... rest of implementation
+}
+```
+
+#### **4.4 Session Interface Usage**
+**Developers can implement custom storage:**
+```go
+// Example: Redis session storage
+type RedisSessionStorage struct {
+    client *redis.Client
+    prefix string
+}
+
+func (r *RedisSessionStorage) Store(ctx context.Context, key string, session *SessionData) error {
+    // Encrypt DPoP key, serialize session, store in Redis
+}
+
+// Use custom storage
+client, err := atproto.New(atproto.Config{
+    ClientID:       "...",
+    SessionStorage: &RedisSessionStorage{client: redisClient},
+}, atproto.ProviderTypeManual)
+```
+
+#### **4.5 Migration Strategy**
+- **Backward Compatible**: Existing cookie-based API unchanged
+- **Opt-in**: Developers can choose to use custom storage
+- **Secure Defaults**: Cookie storage remains secure default
+- **Easy Migration**: Simple interface to implement custom storage
+
+#### **Benefits of Session Storage Interface**
+✅ **Production Ready**: Support for Redis, database, distributed sessions  
+✅ **Security**: Encrypted storage for sensitive DPoP keys  
+✅ **Scalability**: Support for multi-instance applications  
+✅ **Flexibility**: Easy to implement custom storage backends  
+✅ **Backward Compatible**: No breaking changes to existing API  
+
+---
 
 ## Benefits
 

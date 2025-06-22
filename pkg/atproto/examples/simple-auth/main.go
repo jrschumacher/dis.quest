@@ -8,14 +8,14 @@ import (
 	"time"
 
 	"github.com/jrschumacher/dis.quest/pkg/atproto"
-	"github.com/jrschumacher/dis.quest/pkg/atproto/oauth"
 )
 
 func main() {
 	// Replace these with your actual configuration
 	config := atproto.Config{
-		ClientID:    "https://myapp.example.com/client-metadata.json",
-		RedirectURI: "https://myapp.example.com/auth/callback",
+		ClientID:       "https://myapp.example.com/client-metadata.json",
+		RedirectURI:    "https://myapp.example.com/auth/callback",
+		PDSEndpoint:    "https://bsky.social",
 		JWKSPrivateKey: `{
 			"keys": [{
 				"kty": "EC",
@@ -35,11 +35,7 @@ func main() {
 		log.Fatalf("Failed to create client: %v", err)
 	}
 
-	// Generate DPoP key pair for this session
-	dpopKey, err := oauth.GenerateDPoPKeyPair()
-	if err != nil {
-		log.Fatalf("Failed to generate DPoP key: %v", err)
-	}
+	// Note: DPoP keys are now managed automatically by the provider
 
 	// In a real app, you would:
 	// 1. Generate PKCE parameters
@@ -58,17 +54,13 @@ func main() {
 	// This would come from your OAuth callback handler
 	authCode := "simulated-auth-code"
 	codeVerifier := "example-code-verifier"
-	dpopNonce := "" // Will be handled automatically
-	authServerIssuer := "https://bsky.social"
+	// Note: DPoP nonce and auth server issuer are now handled automatically
 
 	// Exchange code for authenticated session
 	session, err := client.ExchangeCode(
 		context.Background(),
 		authCode,
 		codeVerifier,
-		dpopKey.PrivateKey,
-		dpopNonce,
-		authServerIssuer,
 	)
 	if err != nil {
 		log.Fatalf("Failed to exchange code: %v", err)
