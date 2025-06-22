@@ -139,6 +139,8 @@ server/
 - ✅ Record retrieval: Individual and collection listing working
 - ✅ Test Record: `at://did:plc:qknujfbaxt5ggvbsefz3ixop/quest.dis.topic/topic-1750563554124865000`
 - ✅ Key Discovery: `validate: false` required for custom lexicons (learned from WhiteWind analysis)
+- ✅ **PDS Browser Interface**: Working create topic modal with form validation and real-time updates
+- ✅ **Datastar Integration**: Real-time UI updates with proper signal isolation and fragment merging
 
 ### Key Components Working
 - **OAuth Provider Abstraction**: Clean interface supporting multiple OAuth implementations (`/internal/oauth/`)
@@ -161,6 +163,8 @@ server/
 - **DPoP Nonce Handling**: Server nonce retry pattern for 401 responses
 - **Access Token Binding**: Added `ath` claim to DPoP JWT for token security
 - **PAR Integration**: Pushed Authorization Request for DPoP nonce acquisition and auth server discovery
+- **Request Body Consumption**: Fixed double request body reading in PDS test handlers
+- **Token Refresh DPoP Preservation**: Fixed automatic token refresh to preserve DPoP keys in cookies
 
 ### Testing and Validation
 - **Dev Interface**: Complete testing interface at `/dev/pds` with comprehensive OAuth and DPoP testing
@@ -181,6 +185,30 @@ server/
 - **Session Management**: `/internal/auth/session.go` - DPoP key and nonce handling
 - **Dev Interface**: `/server/app/dev.go` - Testing and debugging tools
 - **Documentation**: `/docs/OAUTH_DPOP_IMPLEMENTATION.md` - Complete technical guide
+
+### Common Debugging Patterns
+
+#### Request Body Consumption Issues
+**Problem**: HTTP request bodies can only be read once. Reading the body in middleware or early handlers prevents later functions from accessing the data.
+
+**Solution**: Parse request data once and pass the parsed data to subsequent functions instead of re-reading the body.
+
+**Example Fix**: Modified `DevPDSTestHandler` to store `parsedData` and pass it to `createTopicFromModal()` instead of having each function read `req.Body`.
+
+#### Token Refresh and Session State
+**Problem**: Automatic token refresh must preserve all session state, not just access/refresh tokens. DPoP keys are critical for ATProtocol operations.
+
+**Solution**: When refreshing tokens, explicitly preserve the DPoP key cookie using the `TokenResult.DPoPKey` from the OAuth provider.
+
+**Critical Fix**: 
+```go
+// In token refresh middleware
+if tokenResult.DPoPKey != nil {
+    if err := auth.SetDPoPKeyCookie(w, tokenResult.DPoPKey, false); err != nil {
+        logger.Error("Failed to set DPoP key cookie after refresh", "error", err)
+    }
+}
+```
 
 ### Datastar Integration
 

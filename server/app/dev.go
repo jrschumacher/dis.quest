@@ -36,7 +36,7 @@ func (r *Router) DevPDSHandler(w http.ResponseWriter, req *http.Request) {
 
 	// Get user context if available
 	userCtx, hasAuth := middleware.GetUserContext(req)
-	
+
 	// Check token expiration if user is authenticated
 	var tokenExpired bool
 	var tokenExpiration time.Time
@@ -62,7 +62,7 @@ func (r *Router) DevPDSHandler(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 	}
-	
+
 	devPageData := components.DevPDSPageData{
 		Title:           "PDS Development Tools",
 		HasAuth:         hasAuth,
@@ -71,7 +71,7 @@ func (r *Router) DevPDSHandler(w http.ResponseWriter, req *http.Request) {
 		TokenExpired:    tokenExpired,
 		TokenExpiration: tokenExpiration,
 	}
-	
+
 	if hasAuth {
 		devPageData.UserDID = userCtx.DID
 	}
@@ -97,7 +97,7 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Debug: Log request details
-	logger.Info("Request details", 
+	logger.Info("Request details",
 		"method", req.Method,
 		"contentType", req.Header.Get("Content-Type"),
 		"userAgent", req.Header.Get("User-Agent"),
@@ -105,10 +105,11 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 
 	// Parse request data (could be form data or JSON)
 	var operation, testDID, topicURI string
-	
+	var parsedData map[string]interface{}
+
 	contentType := req.Header.Get("Content-Type")
 	logger.Info("Processing request", "contentType", contentType)
-	
+
 	if strings.Contains(contentType, "application/json") {
 		// Parse JSON data
 		var data map[string]interface{}
@@ -117,9 +118,10 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, "Bad request", http.StatusBadRequest)
 			return
 		}
-		
+
 		logger.Info("Parsed JSON data", "data", data)
-		
+		parsedData = data // Save the parsed data for later use
+
 		if op, ok := data["operation"].(string); ok {
 			operation = op
 		}
@@ -136,24 +138,35 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, "Bad request", http.StatusBadRequest)
 			return
 		}
-		
+
 		operation = req.FormValue("operation")
 		testDID = req.FormValue("test_did")
 		topicURI = req.FormValue("topic_uri")
-		
-		logger.Info("Parsed form data", 
+
+		logger.Info("Parsed form data",
 			"operation", operation,
 			"testDID", testDID,
 			"topicURI", topicURI,
 			"allValues", req.Form,
 		)
+
+		// Convert form data to map for consistency
+		parsedData = make(map[string]interface{})
+		for key, values := range req.Form {
+			if len(values) > 0 {
+				parsedData[key] = values[0]
+			}
+		}
 	}
-	
+
 	if testDID == "" {
 		testDID = "did:plc:test123456789"
 	}
 
 	logger.Info("Processing dev PDS test", "operation", operation, "testDID", testDID)
+
+	// Return result using Datastar
+	sse := datastar.NewSSE(w, req)
 
 	var result TestResult
 
@@ -163,7 +176,28 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 	case "get_pds_record":
 		result = r.getPDSRecord(topicURI)
 	case "create_topic_modal":
-		result = r.createTopicFromModal(req, testDID)
+		result = r.createTopicFromModal(req, testDID, parsedData)
+		// If creation was successful, close modal and refresh topics
+		if result.Success {
+			logger.Info("Topic creation successful, closing modal and refreshing")
+			// Update signals to close modal and clear form
+			signalsJSON, _ := json.Marshal(map[string]any{
+				"showCreateModal": false,
+				"newTopicTitle":   "",
+				"newTopicSummary": "",
+				"newTopicTags":    "",
+				"loadingTopics":   false,
+				"rows":            0,
+			})
+			if err := sse.MergeSignals(signalsJSON); err != nil {
+				logger.Error("Failed to update modal signals", "error", err)
+			}
+
+			// Manually trigger a topic list refresh by changing operation
+			// This will trigger the client to make another request
+			operation = "list_pds_topics"
+			result = r.listPDSTopics(req, testDID)
+		}
 	case "check_server_scopes":
 		result = r.checkServerScopes(testDID)
 	default:
@@ -177,14 +211,11 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 
 	logger.Info("Test completed", "operation", result.Operation, "success", result.Success, "message", result.Message)
 
-	// Return result using Datastar
-	sse := datastar.NewSSE(w, req)
-	
 	// Special handling for list_pds_topics to update the table
 	if operation == "list_pds_topics" && result.Success {
 		// Parse the topics data and build table rows
 		var tableRows strings.Builder
-		
+
 		if strings.HasPrefix(result.Details, "TABLE_DATA:") {
 			// Parse the structured table data
 			tableDataStr := strings.TrimPrefix(result.Details, "TABLE_DATA:")
@@ -201,7 +232,7 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 						tags := parts[2]
 						created := parts[3]
 						uri := parts[4]
-						
+
 						// Truncate long text for table display
 						if len(summary) > 50 {
 							summary = summary[:47] + "..."
@@ -209,7 +240,7 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 						if len(title) > 30 {
 							title = title[:27] + "..."
 						}
-						
+
 						tableRows.WriteString(fmt.Sprintf(`
 							<tr class="hover:bg-gray-50">
 								<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">%s</td>
@@ -222,7 +253,7 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 				}
 			}
 		}
-		
+
 		// If no topics, show empty state
 		if tableRows.Len() == 0 {
 			tableRows.WriteString(`
@@ -232,14 +263,13 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 					</td>
 				</tr>`)
 		}
-		
+
 		logger.Info("Sending table update fragment", "rowCount", strings.Count(tableRows.String(), "<tr"))
-		
-		
+
 		// Build complete tbody content including loading and empty states
 		var completeTableBody strings.Builder
 		completeTableBody.WriteString(`<tbody id="topics-table-body" class="bg-white divide-y divide-gray-200" data-merge="morph">`)
-		
+
 		// Loading state row
 		completeTableBody.WriteString(`
 			<tr data-show="$loadingTopics">
@@ -253,7 +283,7 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 					</div>
 				</td>
 			</tr>`)
-		
+
 		// Add topic rows if we have data
 		if tableRows.Len() > 0 {
 			completeTableBody.WriteString(tableRows.String())
@@ -266,18 +296,18 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 					</td>
 				</tr>`)
 		}
-		
+
 		completeTableBody.WriteString(`</tbody>`)
-		
+
 		// First update loading signal and row count
 		signalsJSON, _ := json.Marshal(map[string]any{
 			"loadingTopics": false,
-			"rows": 0, // Will be updated after we count the topics
+			"rows":          0, // Will be updated after we count the topics
 		})
 		if err := sse.MergeSignals(signalsJSON); err != nil {
 			logger.Error("Failed to update loading signal", "error", err)
 		}
-		
+
 		// Build topics array for template rendering
 		var topics []components.TopicDisplay
 		if strings.HasPrefix(result.Details, "TABLE_DATA:") {
@@ -301,13 +331,13 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 				}
 			}
 		}
-		
+
 		// Update row count signal
 		rowCountJSON, _ := json.Marshal(map[string]any{"rows": len(topics)})
 		if err := sse.MergeSignals(rowCountJSON); err != nil {
 			logger.Error("Failed to update row count", "error", err)
 		}
-		
+
 		// First clear existing rows, then add new ones
 		clearFragment := `<tbody id="topics-table-body" class="bg-white divide-y divide-gray-200">
 			<tr data-show="$loadingTopics">
@@ -327,11 +357,11 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 				</td>
 			</tr>
 		</tbody>`
-		
+
 		if err := sse.MergeFragments(clearFragment); err != nil {
 			logger.Error("Failed to clear table body", "error", err)
 		}
-		
+
 		// Then render topic rows
 		if len(topics) > 0 {
 			if err := sse.MergeFragmentTempl(
@@ -348,11 +378,11 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 		}
 		return
 	}
-	
+
 	// Standard test result display for other operations
 	copyButtonID := fmt.Sprintf("copy-btn-%d", time.Now().UnixNano())
 	detailsID := fmt.Sprintf("details-%d", time.Now().UnixNano())
-	
+
 	// Determine the color scheme based on success
 	colorClasses := "border-red-200 bg-red-50"
 	iconColor := "text-red-500"
@@ -360,7 +390,7 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 		colorClasses = "border-green-200 bg-green-50"
 		iconColor = "text-green-500"
 	}
-	
+
 	htmlFragment := fmt.Sprintf(`<div id="test-results" class="p-4 %s border rounded-lg">
 		<div class="flex items-start space-x-3">
 			<div class="flex-shrink-0">
@@ -379,11 +409,11 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 				<div id="%s" class="mt-3 p-3 bg-gray-100 rounded-md font-mono text-xs whitespace-pre-wrap max-h-96 overflow-y-auto">%s</div>
 			</div>
 		</div>
-	</div>`, 
+	</div>`,
 		colorClasses,
 		iconColor,
-		func() string { 
-			if result.Success { 
+		func() string {
+			if result.Success {
 				return `<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>`
 			}
 			return `<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>`
@@ -395,9 +425,9 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 		detailsID,
 		result.Details,
 	)
-	
+
 	logger.Info("Sending fragment", "html", htmlFragment[:100]+"...")
-	
+
 	if err := sse.MergeFragments(htmlFragment); err != nil {
 		logger.Error("Failed to merge fragments", "error", err)
 	} else {
@@ -567,7 +597,7 @@ func (r *Router) simulateGetTopic(uri string) TestResult {
 func (r *Router) testRealPDSStructure(testDID string) TestResult {
 	// Test what the real PDS service would do (without making actual calls)
 	atprotoService := pds.NewATProtoService()
-	
+
 	// Test structure without network calls
 	params := pds.CreateTopicParams{
 		Title:   "Real PDS Structure Test",
@@ -577,10 +607,10 @@ func (r *Router) testRealPDSStructure(testDID string) TestResult {
 
 	// This would fail on the actual HTTP call, but we can see the structure
 	_, err := atprotoService.CreateTopic(testDID, params)
-	
+
 	// Expected to fail due to no auth, but structure is correct
-	if err != nil && (containsString(err.Error(), "failed to create topic in PDS") || 
-					 containsString(err.Error(), "PDS request failed")) {
+	if err != nil && (containsString(err.Error(), "failed to create topic in PDS") ||
+		containsString(err.Error(), "PDS request failed")) {
 		return TestResult{
 			Operation: "test_real_pds_structure",
 			Success:   true,
@@ -598,9 +628,9 @@ func (r *Router) testRealPDSStructure(testDID string) TestResult {
 }
 
 func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && s[:len(substr)] == substr || 
-		   (len(s) > len(substr) && s[len(s)-len(substr):] == substr) ||
-		   (len(substr) < len(s) && containsStringHelper(s, substr))
+	return len(s) >= len(substr) && s[:len(substr)] == substr ||
+		(len(s) > len(substr) && s[len(s)-len(substr):] == substr) ||
+		(len(substr) < len(s) && containsStringHelper(s, substr))
 }
 
 func containsStringHelper(s, substr string) bool {
@@ -616,24 +646,24 @@ func containsStringHelper(s, substr string) bool {
 func (r *Router) browseRealPDS(userDID string) TestResult {
 	// Use the real XRPC client to list records
 	xrpcClient := pds.NewXRPCClient()
-	
+
 	// Try to list quest.dis.topic records
 	ctx := context.Background()
 	// Note: This will likely fail due to no access token, but we can see the structure
 	response, err := xrpcClient.ListRecords(ctx, userDID, pds.TopicLexicon, 10, "", "")
-	
+
 	if err != nil {
 		return TestResult{
-			Operation: "browse_real_pds", 
+			Operation: "browse_real_pds",
 			Success:   false,
 			Message:   "Expected failure - needs authentication",
 			Details:   fmt.Sprintf("Error: %v\nThis shows the PDS browsing structure is correct, but needs access token for real queries.", err),
 		}
 	}
-	
+
 	return TestResult{
 		Operation: "browse_real_pds",
-		Success:   true, 
+		Success:   true,
 		Message:   fmt.Sprintf("Found %d quest.dis.topic records", len(response.Records)),
 		Details:   fmt.Sprintf("Records: %+v", response.Records),
 	}
@@ -651,7 +681,7 @@ func (r *Router) listPDSTopics(req *http.Request, userDID string) TestResult {
 			Details:   fmt.Sprintf("Error getting session cookie: %v", err),
 		}
 	}
-	
+
 	// Extract DPoP key from session
 	dpopKey, err := auth.GetDPoPKeyFromCookie(req)
 	if err != nil {
@@ -662,11 +692,11 @@ func (r *Router) listPDSTopics(req *http.Request, userDID string) TestResult {
 			Details:   fmt.Sprintf("DPoP key required for ATProtocol OAuth. Error: %v", err),
 		}
 	}
-	
+
 	// Use the real XRPC client to list records
 	xrpcClient := pds.NewXRPCClient()
 	ctx := context.Background()
-	
+
 	// Try to list quest.dis.topic records
 	response, err := xrpcClient.ListRecordsWithDPoP(ctx, userDID, pds.TopicLexicon, 50, "", "", accessToken, dpopKey)
 	if err != nil {
@@ -677,7 +707,7 @@ func (r *Router) listPDSTopics(req *http.Request, userDID string) TestResult {
 			Details:   fmt.Sprintf("Error: %v\n\nThis could be due to:\n- Missing DPoP headers\n- Insufficient OAuth scopes\n- PDS connectivity issues\n- No topics exist yet", err),
 		}
 	}
-	
+
 	if len(response.Records) == 0 {
 		return TestResult{
 			Operation: "list_pds_topics",
@@ -686,19 +716,19 @@ func (r *Router) listPDSTopics(req *http.Request, userDID string) TestResult {
 			Details:   "You haven't created any quest.dis.topic records yet. Use the 'Create Topic' button to create your first topic!",
 		}
 	}
-	
+
 	// Store the actual topic data for table rendering
 	type TopicForTable struct {
-		Title     string
-		Summary   string
-		Tags      string
-		Created   string
-		URI       string
+		Title   string
+		Summary string
+		Tags    string
+		Created string
+		URI     string
 	}
-	
+
 	var topics []TopicForTable
 	var topicsInfo []string
-	
+
 	for _, record := range response.Records {
 		// Parse the record to get topic details
 		topicData := record.Value
@@ -706,12 +736,12 @@ func (r *Router) listPDSTopics(req *http.Request, userDID string) TestResult {
 		if t, exists := topicData["title"].(string); exists {
 			title = t
 		}
-		
+
 		summary := "No summary"
 		if s, exists := topicData["summary"].(string); exists {
 			summary = s
 		}
-		
+
 		var tagList []string
 		if tagsInterface, exists := topicData["tags"].([]interface{}); exists {
 			for _, tag := range tagsInterface {
@@ -724,14 +754,14 @@ func (r *Router) listPDSTopics(req *http.Request, userDID string) TestResult {
 		if tagsStr == "" {
 			tagsStr = "none"
 		}
-		
+
 		createdAt := "Unknown"
 		if c, exists := topicData["createdAt"].(string); exists {
 			if parsed, parseErr := time.Parse(time.RFC3339, c); parseErr == nil {
 				createdAt = parsed.Format("2006-01-02 15:04")
 			}
 		}
-		
+
 		// Store structured data for table
 		topics = append(topics, TopicForTable{
 			Title:   title,
@@ -740,13 +770,13 @@ func (r *Router) listPDSTopics(req *http.Request, userDID string) TestResult {
 			Created: createdAt,
 			URI:     record.URI,
 		})
-		
+
 		// Also keep the formatted string for fallback display
-		topicInfo := fmt.Sprintf("Title: %s\nSummary: %s\nTags: %s\nCreated: %s\nURI: %s", 
+		topicInfo := fmt.Sprintf("Title: %s\nSummary: %s\nTags: %s\nCreated: %s\nURI: %s",
 			title, summary, tagsStr, createdAt, record.URI)
 		topicsInfo = append(topicsInfo, topicInfo)
 	}
-	
+
 	// Include the structured data in a special field for the table handler
 	result := TestResult{
 		Operation: "list_pds_topics",
@@ -754,19 +784,19 @@ func (r *Router) listPDSTopics(req *http.Request, userDID string) TestResult {
 		Message:   fmt.Sprintf("Found %d topics", len(response.Records)),
 		Details:   fmt.Sprintf("Topics found:\n\n%s", strings.Join(topicsInfo, "\n\n---\n\n")),
 	}
-	
+
 	// Add structured topic data for table rendering (we'll access this via a type assertion)
 	if len(topics) > 0 {
 		// Store the topics in Details for now, but we'll parse them in the handler
 		var tableData []string
 		for _, topic := range topics {
-			tableData = append(tableData, fmt.Sprintf("%s|%s|%s|%s|%s", 
+			tableData = append(tableData, fmt.Sprintf("%s|%s|%s|%s|%s",
 				topic.Title, topic.Summary, topic.Tags, topic.Created, topic.URI))
 		}
 		// Replace Details with pipe-separated data for easy parsing
 		result.Details = "TABLE_DATA:" + strings.Join(tableData, "||")
 	}
-	
+
 	return result
 }
 
@@ -776,11 +806,11 @@ func (r *Router) getPDSRecord(uri string) TestResult {
 		return TestResult{
 			Operation: "get_pds_record",
 			Success:   false,
-			Message:   "No URI provided", 
+			Message:   "No URI provided",
 			Details:   "Please enter a valid AT URI like: at://did:plc:abc/quest.dis.topic/topic-123",
 		}
 	}
-	
+
 	// Parse the URI
 	components, err := pds.ParseATUri(uri)
 	if err != nil {
@@ -791,18 +821,18 @@ func (r *Router) getPDSRecord(uri string) TestResult {
 			Details:   fmt.Sprintf("Error parsing URI: %v", err),
 		}
 	}
-	
+
 	// Try to get the record (will fail without auth, but shows structure)
 	xrpcClient := pds.NewXRPCClient()
 	ctx := context.Background()
-	
+
 	_, err = xrpcClient.GetRecord(ctx, components.DID, components.Collection, components.RKey, "")
-	
+
 	return TestResult{
 		Operation: "get_pds_record",
 		Success:   false,
 		Message:   "Expected failure - needs authentication",
-		Details:   fmt.Sprintf("Attempted to fetch:\nDID: %s\nCollection: %s\nRKey: %s\n\nError: %v\n\nTo access real records, we need your access token.", 
+		Details: fmt.Sprintf("Attempted to fetch:\nDID: %s\nCollection: %s\nRKey: %s\n\nError: %v\n\nTo access real records, we need your access token.",
 			components.DID, components.Collection, components.RKey, err),
 	}
 }
@@ -812,12 +842,12 @@ func (r *Router) createRandomTopic(req *http.Request, userDID string) TestResult
 	// Generate random topic data
 	topics := []string{
 		"Random Dev Test Topic",
-		"ATProtocol Integration Test", 
+		"ATProtocol Integration Test",
 		"PDS Browsing Validation",
 		"Lexicon Testing Topic",
 		"Quest Discussion Sample",
 	}
-	
+
 	messages := []string{
 		"This is a randomly generated topic for testing the PDS integration!",
 		"Testing quest.dis.topic lexicon with real data.",
@@ -825,7 +855,7 @@ func (r *Router) createRandomTopic(req *http.Request, userDID string) TestResult
 		"Generated from the dev interface to test browsing functionality.",
 		"Sample topic created to verify PDS storage works correctly.",
 	}
-	
+
 	tagSets := [][]string{
 		{"dev", "test", "random"},
 		{"atprotocol", "lexicon", "validation"},
@@ -833,15 +863,15 @@ func (r *Router) createRandomTopic(req *http.Request, userDID string) TestResult
 		{"quest", "discussion", "sample"},
 		{"e2e", "testing", "demo"},
 	}
-	
+
 	rand.Seed(time.Now().UnixNano())
 	randomTopic := topics[rand.Intn(len(topics))]
 	randomMessage := messages[rand.Intn(len(messages))]
 	randomTags := tagSets[rand.Intn(len(tagSets))]
-	
+
 	// Add timestamp to make it unique
 	uniqueTopic := fmt.Sprintf("%s [%s]", randomTopic, time.Now().Format("15:04:05"))
-	
+
 	// Extract access token from session
 	accessToken, err := auth.GetSessionCookie(req)
 	if err != nil {
@@ -852,7 +882,7 @@ func (r *Router) createRandomTopic(req *http.Request, userDID string) TestResult
 			Details:   fmt.Sprintf("Error getting session cookie: %v", err),
 		}
 	}
-	
+
 	// Extract DPoP key from session (required for ATProtocol OAuth)
 	dpopKey, err := auth.GetDPoPKeyFromCookie(req)
 	if err != nil {
@@ -864,9 +894,9 @@ func (r *Router) createRandomTopic(req *http.Request, userDID string) TestResult
 			Details:   fmt.Sprintf("DPoP key required for ATProtocol OAuth. Error: %v\nPlease use the 'Force Re-authenticate' button to get a fresh session with DPoP key.", err),
 		}
 	}
-	
+
 	logger.Info("Successfully extracted DPoP key", "keyType", fmt.Sprintf("%T", dpopKey))
-	
+
 	// Check if the JWT token is expired and inspect scopes (basic check)
 	if accessToken != "" {
 		// Simple JWT expiration and scope check without full validation
@@ -893,7 +923,7 @@ func (r *Router) createRandomTopic(req *http.Request, userDID string) TestResult
 							}
 						}
 					}
-					
+
 					// Log token scopes for debugging
 					if scope, ok := claims["scope"]; ok {
 						logger.Info("Token scopes found", "scope", scope)
@@ -904,14 +934,14 @@ func (r *Router) createRandomTopic(req *http.Request, userDID string) TestResult
 			}
 		}
 	}
-	
+
 	// Create the topic using our PDS service
 	params := pds.CreateTopicParams{
 		Title:   uniqueTopic,
 		Summary: randomMessage,
 		Tags:    randomTags,
 	}
-	
+
 	// Cast to ATProtoService to access token-aware methods
 	atprotoService, ok := r.pdsService.(*pds.ATProtoService)
 	if !ok {
@@ -923,38 +953,43 @@ func (r *Router) createRandomTopic(req *http.Request, userDID string) TestResult
 			Details:   "This operation requires the real ATProtocol PDS service",
 		}
 	}
-	
-	logger.Info("About to call CreateTopicWithDPoP", 
+
+	logger.Info("About to call CreateTopicWithDPoP",
 		"userDID", userDID,
 		"params", params,
 		"hasAccessToken", accessToken != "",
 		"dpopKeyType", fmt.Sprintf("%T", dpopKey))
-	
+
 	// Use the real ATProtocol service with access token and DPoP key
 	topic, err := atprotoService.CreateTopicWithDPoP(userDID, params, accessToken, dpopKey)
-	
+
 	logger.Info("CreateTopicWithDPoP completed", "hasError", err != nil)
 	if err != nil {
 		logger.Error("CreateTopicWithDPoP failed", "error", err)
 	}
-	
+
 	if err != nil {
 		return TestResult{
 			Operation: "create_random_topic",
 			Success:   false,
 			Message:   "PDS creation failed - DPoP headers required",
-			Details:   fmt.Sprintf("Topic: %s\nMessage: %s\nTags: %v\n\nAccess token: %s\n\nError: %v\n\nThe request has valid scopes but is missing required DPoP headers. ATProtocol OAuth requires DPoP (Demonstration of Proof of Possession) headers for authenticated requests. This is the next implementation step.", 
-				uniqueTopic, randomMessage, randomTags, 
-				func() string { if len(accessToken) > 20 { return accessToken[:20] + "..." }; return accessToken }(), 
+			Details: fmt.Sprintf("Topic: %s\nMessage: %s\nTags: %v\n\nAccess token: %s\n\nError: %v\n\nThe request has valid scopes but is missing required DPoP headers. ATProtocol OAuth requires DPoP (Demonstration of Proof of Possession) headers for authenticated requests. This is the next implementation step.",
+				uniqueTopic, randomMessage, randomTags,
+				func() string {
+					if len(accessToken) > 20 {
+						return accessToken[:20] + "..."
+					}
+					return accessToken
+				}(),
 				err),
 		}
 	}
-	
+
 	return TestResult{
 		Operation: "create_random_topic",
 		Success:   true,
 		Message:   "Successfully created random topic!",
-		Details:   fmt.Sprintf("Created topic in PDS:\nURI: %s\nCID: %s\nTitle: %s\nTags: %v\n\nYou should now be able to browse this record!", 
+		Details: fmt.Sprintf("Created topic in PDS:\nURI: %s\nCID: %s\nTitle: %s\nTags: %v\n\nYou should now be able to browse this record!",
 			topic.URI, topic.CID, topic.Title, topic.Tags),
 	}
 }
@@ -971,7 +1006,7 @@ func (r *Router) testStandardPost(req *http.Request, userDID string) TestResult 
 			Details:   fmt.Sprintf("Error getting session cookie: %v", err),
 		}
 	}
-	
+
 	// Extract DPoP key from session
 	dpopKey, err := auth.GetDPoPKeyFromCookie(req)
 	if err != nil {
@@ -982,19 +1017,19 @@ func (r *Router) testStandardPost(req *http.Request, userDID string) TestResult 
 			Details:   fmt.Sprintf("DPoP key required for ATProtocol OAuth. Error: %v", err),
 		}
 	}
-	
+
 	// Create a standard Bluesky post record
 	postText := fmt.Sprintf("Testing DPoP implementation from dis.quest dev interface at %s", time.Now().Format("15:04:05"))
-	
+
 	postRecord := map[string]interface{}{
 		"$type":     "app.bsky.feed.post",
 		"text":      postText,
 		"createdAt": time.Now().Format(time.RFC3339),
 	}
-	
+
 	// Generate unique rkey
 	rkey := pds.GenerateRKey("post")
-	
+
 	// Create XRPC request
 	createReq := pds.CreateRecordRequest{
 		Repo:       userDID,
@@ -1003,11 +1038,11 @@ func (r *Router) testStandardPost(req *http.Request, userDID string) TestResult 
 		Validate:   true,
 		Record:     postRecord,
 	}
-	
+
 	// Use XRPC client directly
 	xrpcClient := pds.NewXRPCClient()
 	ctx := context.Background()
-	
+
 	// Debug: Check token scopes again for this specific operation
 	if accessToken != "" {
 		parts := strings.Split(accessToken, ".")
@@ -1020,7 +1055,7 @@ func (r *Router) testStandardPost(req *http.Request, userDID string) TestResult 
 				var claims map[string]interface{}
 				if jsonErr := json.Unmarshal(decoded, &claims); jsonErr == nil {
 					logger.Info("Token claims for standard post", "allClaims", claims)
-					
+
 					// Extract the JKT (JWK thumbprint) from the token
 					if cnf, ok := claims["cnf"].(map[string]interface{}); ok {
 						if jkt, ok := cnf["jkt"].(string); ok {
@@ -1031,12 +1066,12 @@ func (r *Router) testStandardPost(req *http.Request, userDID string) TestResult 
 			}
 		}
 	}
-	
+
 	// Calculate JWK thumbprint of our DPoP key
 	keyPair := &auth.DPoPKeyPair{PrivateKey: dpopKey}
 	jwk := keyPair.DPoPPublicJWK()
 	logger.Info("Our DPoP key JWK", "jwk", jwk)
-	
+
 	// Calculate thumbprint - this should match the jkt value in the token
 	thumbprint, err := keyPair.GetJWKThumbprint()
 	if err != nil {
@@ -1044,17 +1079,17 @@ func (r *Router) testStandardPost(req *http.Request, userDID string) TestResult 
 	} else {
 		logger.Info("Our DPoP key thumbprint", "thumbprint", thumbprint)
 	}
-	
+
 	jwkBytes, _ := json.Marshal(jwk)
 	logger.Info("DPoP key for comparison", "jwkJson", string(jwkBytes))
-	
+
 	logger.Info("Testing standard post creation", "userDID", userDID, "text", postText)
-	
+
 	resp, err := xrpcClient.CreateRecordWithDPoP(ctx, createReq, accessToken, dpopKey)
 	if err != nil {
 		// Log the full error for debugging
 		logger.Error("Standard post creation failed with detailed error", "error", err, "userDID", userDID, "postText", postText)
-		
+
 		// Enhanced error details with request information
 		errorDetails := fmt.Sprintf(`Post Creation Failure Details:
 Post Text: %s
@@ -1072,10 +1107,10 @@ Request Details:
 - Headers: Authorization Bearer + DPoP
 - Record Type: app.bsky.feed.post
 
-This error contains the exact response from Bluesky's API explaining why the request failed.`, 
-			postText, userDID, createReq.Collection, createReq.RKey, 
+This error contains the exact response from Bluesky's API explaining why the request failed.`,
+			postText, userDID, createReq.Collection, createReq.RKey,
 			accessToken != "", dpopKey != nil, err)
-		
+
 		return TestResult{
 			Operation: "test_standard_post",
 			Success:   false,
@@ -1083,7 +1118,7 @@ This error contains the exact response from Bluesky's API explaining why the req
 			Details:   errorDetails,
 		}
 	}
-	
+
 	return TestResult{
 		Operation: "test_standard_post",
 		Success:   true,
@@ -1103,33 +1138,24 @@ func (r *Router) testSessionAuth(req *http.Request, userDID string) TestResult {
 }
 
 // createTopicFromModal creates a topic using the modal form data
-func (r *Router) createTopicFromModal(req *http.Request, userDID string) TestResult {
-	// Parse request data
+func (r *Router) createTopicFromModal(req *http.Request, userDID string, parsedData map[string]interface{}) TestResult {
+	logger.Info("createTopicFromModal called", "userDID", userDID, "parsedData", parsedData)
+
+	// Extract form data from the already-parsed data
 	var newTopicTitle, newTopicSummary, newTopicTags string
-	
-	contentType := req.Header.Get("Content-Type")
-	if strings.Contains(contentType, "application/json") {
-		var data map[string]interface{}
-		if err := json.NewDecoder(req.Body).Decode(&data); err != nil {
-			return TestResult{
-				Operation: "create_topic_modal",
-				Success:   false,
-				Message:   "Failed to parse request data",
-				Details:   err.Error(),
-			}
-		}
-		
-		if title, ok := data["newTopicTitle"].(string); ok {
-			newTopicTitle = title
-		}
-		if summary, ok := data["newTopicSummary"].(string); ok {
-			newTopicSummary = summary
-		}
-		if tags, ok := data["newTopicTags"].(string); ok {
-			newTopicTags = tags
-		}
+
+	if title, ok := parsedData["newTopicTitle"].(string); ok {
+		newTopicTitle = title
 	}
-	
+	if summary, ok := parsedData["newTopicSummary"].(string); ok {
+		newTopicSummary = summary
+	}
+	if tags, ok := parsedData["newTopicTags"].(string); ok {
+		newTopicTags = tags
+	}
+
+	logger.Info("Extracted form data", "title", newTopicTitle, "summary", newTopicSummary, "tags", newTopicTags)
+
 	if newTopicTitle == "" || newTopicSummary == "" {
 		return TestResult{
 			Operation: "create_topic_modal",
@@ -1138,7 +1164,7 @@ func (r *Router) createTopicFromModal(req *http.Request, userDID string) TestRes
 			Details:   "Please fill in both title and summary fields",
 		}
 	}
-	
+
 	// Parse tags
 	var tagList []string
 	if newTopicTags != "" {
@@ -1150,7 +1176,7 @@ func (r *Router) createTopicFromModal(req *http.Request, userDID string) TestRes
 			}
 		}
 	}
-	
+
 	// Extract access token and DPoP key
 	accessToken, err := auth.GetSessionCookie(req)
 	if err != nil {
@@ -1161,7 +1187,7 @@ func (r *Router) createTopicFromModal(req *http.Request, userDID string) TestRes
 			Details:   fmt.Sprintf("Error getting session cookie: %v", err),
 		}
 	}
-	
+
 	dpopKey, err := auth.GetDPoPKeyFromCookie(req)
 	if err != nil {
 		return TestResult{
@@ -1171,14 +1197,14 @@ func (r *Router) createTopicFromModal(req *http.Request, userDID string) TestRes
 			Details:   fmt.Sprintf("DPoP key required for ATProtocol OAuth. Error: %v", err),
 		}
 	}
-	
+
 	// Create the topic
 	params := pds.CreateTopicParams{
 		Title:   newTopicTitle,
 		Summary: newTopicSummary,
 		Tags:    tagList,
 	}
-	
+
 	atprotoService, ok := r.pdsService.(*pds.ATProtoService)
 	if !ok {
 		return TestResult{
@@ -1188,7 +1214,7 @@ func (r *Router) createTopicFromModal(req *http.Request, userDID string) TestRes
 			Details:   "ATProtocol service required for topic creation",
 		}
 	}
-	
+
 	topic, err := atprotoService.CreateTopicWithDPoP(userDID, params, accessToken, dpopKey)
 	if err != nil {
 		return TestResult{
@@ -1198,7 +1224,7 @@ func (r *Router) createTopicFromModal(req *http.Request, userDID string) TestRes
 			Details:   fmt.Sprintf("Title: %s\nSummary: %s\nTags: %v\n\nError: %v", newTopicTitle, newTopicSummary, tagList, err),
 		}
 	}
-	
+
 	return TestResult{
 		Operation: "create_topic_modal",
 		Success:   true,
@@ -1236,9 +1262,9 @@ DPoP Signing Algorithms: %s
 
 Current token scope: atproto transition:generic
 
-This shows what scopes the server actually supports vs what we're requesting.`, 
+This shows what scopes the server actually supports vs what we're requesting.`,
 		metadata.Issuer,
-		metadata.AuthorizationEndpoint, 
+		metadata.AuthorizationEndpoint,
 		metadata.TokenEndpoint,
 		metadata.PushedAuthorizationRequestEndpoint,
 		supportedScopes,

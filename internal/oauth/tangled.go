@@ -137,7 +137,63 @@ func (t *TangledOAuthProvider) CreateAuthorizedClient(token *TokenResult) (XRPCC
 
 // RefreshToken refreshes an expired access token
 func (t *TangledOAuthProvider) RefreshToken(ctx context.Context, refreshToken string) (*TokenResult, error) {
-	return nil, fmt.Errorf("tangled provider not yet fully implemented")
+	// Get HTTP request from context for session access
+	req, ok := ctx.Value("http_request").(*http.Request)
+	if !ok {
+		return nil, fmt.Errorf("HTTP request not found in context")
+	}
+	
+	log.Printf("[TangledOAuthProvider] Starting token refresh")
+	
+	// Get auth server issuer from session/cookie
+	authServerIssuer, err := auth.GetAuthServerIssuerFromCookie(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get auth server issuer: %w", err)
+	}
+	
+	// Get DPoP key from cookies (in JWK format for tangled library)
+	dpopKeyStr, err := auth.GetDPoPKeyFromRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get DPoP key: %w", err)
+	}
+
+	// Parse DPoP key using tangled library helpers
+	jwkKey, err := helpers.ParseJWKFromBytes([]byte(dpopKeyStr))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse DPoP JWK: %w", err)
+	}
+	
+	// Get DPoP nonce (may be empty for refresh)
+	dpopNonce, _ := auth.GetDPoPNonceFromCookie(req)
+	
+	// Use tangled library's RefreshTokenRequest
+	tokenResp, err := t.oauthClient.RefreshTokenRequest(
+		ctx,
+		refreshToken,
+		authServerIssuer,
+		dpopNonce,
+		jwkKey,
+	)
+	if err != nil {
+		log.Printf("[TangledOAuthProvider] Token refresh failed: %v", err)
+		return nil, fmt.Errorf("tangled token refresh failed: %w", err)
+	}
+	
+	log.Printf("[TangledOAuthProvider] Token refresh successful")
+	
+	// Extract ECDSA key from the original key for compatibility
+	dpopECDSAKey, err := auth.GetDPoPKeyFromCookie(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ECDSA key for result: %w", err)
+	}
+	
+	return &TokenResult{
+		AccessToken:  tokenResp.AccessToken,
+		RefreshToken: tokenResp.RefreshToken,
+		DPoPKey:      dpopECDSAKey,
+		UserDID:      tokenResp.Sub,
+		ExpiresIn:    int64(tokenResp.ExpiresIn),
+	}, nil
 }
 
 // GetProviderName returns the name of this provider implementation

@@ -7,11 +7,13 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/jrschumacher/dis.quest/internal/config"
 	"golang.org/x/oauth2"
@@ -308,4 +310,43 @@ func ExchangeCodeForTokenWithDPoP(ctx context.Context, metadata *AuthorizationSe
 		},
 	})
 	return conf.Exchange(ctx, code)
+}
+
+// IsTokenExpiringSoon checks if the access token will expire within the given threshold
+func IsTokenExpiringSoon(accessToken string, thresholdMinutes int) bool {
+	if accessToken == "" {
+		return true
+	}
+	
+	// Parse JWT to get expiration
+	parts := strings.Split(accessToken, ".")
+	if len(parts) != 3 {
+		return true // Invalid token format
+	}
+	
+	// Decode payload
+	payload := parts[1]
+	// Add padding if needed for base64 decoding
+	for len(payload)%4 != 0 {
+		payload += "="
+	}
+	
+	decoded, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return true // Can't decode, assume expired
+	}
+	
+	var claims map[string]interface{}
+	if err := json.Unmarshal(decoded, &claims); err != nil {
+		return true // Can't parse claims, assume expired
+	}
+	
+	// Check expiration
+	if exp, ok := claims["exp"].(float64); ok {
+		expTime := time.Unix(int64(exp), 0)
+		// Check if token expires within threshold
+		return time.Now().Add(time.Duration(thresholdMinutes) * time.Minute).After(expTime)
+	}
+	
+	return true // No exp claim, assume expired
 }

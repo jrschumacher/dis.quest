@@ -6,7 +6,9 @@ import (
 
 	"github.com/jrschumacher/dis.quest/internal/config"
 	"github.com/jrschumacher/dis.quest/internal/db"
+	"github.com/jrschumacher/dis.quest/internal/logger"
 	"github.com/jrschumacher/dis.quest/internal/middleware"
+	"github.com/jrschumacher/dis.quest/internal/oauth"
 	"github.com/jrschumacher/dis.quest/internal/pds"
 	"github.com/jrschumacher/dis.quest/internal/svrlib"
 )
@@ -26,17 +28,37 @@ func RegisterRoutes(mux *http.ServeMux, _ string, cfg *config.Config, dbService 
 		pdsService: pdsService,
 	}
 
+	// Create OAuth service for token refresh
+	oauthService, err := oauth.NewService(cfg)
+	if err != nil {
+		// Log error but don't fail startup - token refresh will be disabled
+		logger.Error("Failed to create OAuth service for token refresh", "error", err)
+	}
+
 	// Create route groups
 	public := middleware.PublicGroup(mux, cfg.AppEnv)
 	protectedPages := middleware.ProtectedPageGroup(mux, cfg.AppEnv)
 	raw := middleware.RawGroup(mux)
 
+	// Create protected routes with automatic token refresh
+	var protectedWithRefresh *middleware.RouteGroup
+	if oauthService != nil {
+		protectedWithRefresh = middleware.AutoRefreshGroup(mux, oauthService,
+			middleware.UserContextMiddleware,
+			middleware.AuthMiddleware,
+			middleware.LayoutMiddleware(cfg.AppEnv),
+		)
+	} else {
+		// Fallback to regular protected routes if OAuth service creation failed
+		protectedWithRefresh = protectedPages
+	}
+
 	// Public routes
 	public.HandleFunc("/", router.LandingHandler)
 	public.HandleFunc("/login", router.LoginHandler)
 
-	// Protected pages
-	protectedPages.HandleFunc("/discussion", router.DiscussionHandler)
+	// Protected pages with auto token refresh
+	protectedWithRefresh.HandleFunc("/discussion", router.DiscussionHandler)
 
 	// Semi-public pages (user context but no auth required)
 	pagesWithContext := middleware.NewRouteGroup(mux, 
@@ -45,22 +67,36 @@ func RegisterRoutes(mux *http.ServeMux, _ string, cfg *config.Config, dbService 
 	)
 	pagesWithContext.HandleFunc("/topics", router.TopicsHandler)
 
-	// Protected API routes (require authentication)
-	protectedAPI := middleware.ProtectedAPIGroup(mux)
-	protectedAPI.HandleFunc("/api/topics", router.TopicsAPIHandler)
-	protectedAPI.HandleFunc("/api/topics/{id}/messages", router.MessagesAPIHandler)
-	protectedAPI.HandleFunc("/api/messages/{id}/like", router.LikeMessageHandler)
-	protectedAPI.HandleFunc("/api/messages/reply", router.ReplyMessageHandler)
-	protectedAPI.HandleFunc("/api/pds/topics", router.PDSTopicsHandler)
-	protectedAPI.HandleFunc("/api/pds/record", router.PDSRecordHandler)
+	// Protected API routes with auto token refresh
+	var protectedAPIWithRefresh *middleware.RouteGroup
+	if oauthService != nil {
+		protectedAPIWithRefresh = middleware.AutoRefreshGroup(mux, oauthService,
+			middleware.UserContextMiddleware,
+			middleware.AuthMiddleware,
+		)
+	} else {
+		protectedAPIWithRefresh = middleware.ProtectedAPIGroup(mux)
+	}
+	protectedAPIWithRefresh.HandleFunc("/api/topics", router.TopicsAPIHandler)
+	protectedAPIWithRefresh.HandleFunc("/api/topics/{id}/messages", router.MessagesAPIHandler)
+	protectedAPIWithRefresh.HandleFunc("/api/messages/{id}/like", router.LikeMessageHandler)
+	protectedAPIWithRefresh.HandleFunc("/api/messages/reply", router.ReplyMessageHandler)
+	protectedAPIWithRefresh.HandleFunc("/api/pds/topics", router.PDSTopicsHandler)
+	protectedAPIWithRefresh.HandleFunc("/api/pds/record", router.PDSRecordHandler)
 
 	// Raw routes (no middleware)
 	raw.HandleFunc("/stream/topics", router.TopicsStreamHandler)
 	
-	// Development routes (only in development)
+	// Development routes (only in development) with auto token refresh
 	if cfg.AppEnv == "development" {
 		pagesWithContext.HandleFunc("/dev/pds", router.DevPDSHandler)
-		raw.HandleFunc("/dev/pds/test", router.DevPDSTestHandler)
+		if oauthService != nil {
+			// Use auto-refresh for PDS test operations since they use tokens
+			devAPIWithRefresh := middleware.AutoRefreshGroup(mux, oauthService)
+			devAPIWithRefresh.HandleFunc("/dev/pds/test", router.DevPDSTestHandler)
+		} else {
+			raw.HandleFunc("/dev/pds/test", router.DevPDSTestHandler)
+		}
 	}
 
 	return router
