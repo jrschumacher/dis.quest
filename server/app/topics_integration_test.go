@@ -85,8 +85,8 @@ func TestTopicsAPI_CreateTopic_Integration(t *testing.T) {
 				}
 
 				// Verify the response contains expected fields
-				if subject, ok := response["subject"].(string); !ok || subject != tt.requestBody["subject"] {
-					t.Errorf("Expected subject %v, got %v", tt.requestBody["subject"], subject)
+				if title, ok := response["title"].(string); !ok || title != tt.requestBody["subject"] {
+					t.Errorf("Expected title %v, got %v", tt.requestBody["subject"], title)
 				}
 			}
 		})

@@ -8,11 +8,12 @@ import (
 
 // TokenResult represents the result of a successful OAuth token exchange
 type TokenResult struct {
-	AccessToken  string
-	RefreshToken string
-	DPoPKey      *ecdsa.PrivateKey
-	UserDID      string
-	ExpiresIn    int64
+	AccessToken    string
+	RefreshToken   string
+	DPoPKey        *ecdsa.PrivateKey
+	UserDID        string
+	ExpiresIn      int64
+	AtprotoSession interface{} // Enhanced: Include atproto.Session when available (interface{} to avoid direct dependency)
 }
 
 // XRPCClient represents an authenticated XRPC client for ATProtocol operations

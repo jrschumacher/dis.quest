@@ -226,6 +226,15 @@ templ DevPDSPage(data DevPDSPageData) {
 										</button>
 										<p class="text-xs text-gray-600">Show OAuth scopes supported</p>
 									</div>
+									<div class="flex items-start space-x-3">
+										<button 
+											data-on-click="$operation = 'test_new_package'; @post('/dev/pds/test')"
+											class="flex-shrink-0 inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700"
+										>
+											🎉 Test New Package
+										</button>
+										<p class="text-xs text-gray-600">Test our extracted ATProtocol Go package (/pkg/atproto)</p>
+									</div>
 								</div>
 							</div>
 						</section>

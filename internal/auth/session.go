@@ -3,17 +3,14 @@ package auth
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/sha256"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"net/http"
-	"net/url"
-	"time"
+	"strings"
+
+	"github.com/jrschumacher/dis.quest/pkg/atproto"
+	"github.com/jrschumacher/dis.quest/pkg/atproto/oauth"
 )
 
 // CreateSessionRequest represents a session creation request
@@ -58,305 +55,95 @@ func CreateSession(pds, handle, password string) (*CreateSessionResponse, error)
 	return &out, nil
 }
 
-// DPoPKeyPair holds an ECDSA P-256 keypair for DPoP
-// Only the private key is needed to sign DPoP JWTs; public key is used for JWK
-type DPoPKeyPair struct {
-	PrivateKey *ecdsa.PrivateKey
-}
+// DPoPKeyPair is a type alias for the consolidated implementation
+type DPoPKeyPair = oauth.DPoPKeyPair
 
 // GenerateDPoPKeyPair generates a new ECDSA P-256 keypair for DPoP
 func GenerateDPoPKeyPair() (*DPoPKeyPair, error) {
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, err
-	}
-	return &DPoPKeyPair{PrivateKey: priv}, nil
+	return oauth.GenerateDPoPKeyPair()
 }
 
 // EncodeDPoPPrivateKeyToPEM encodes the private key as PEM for storage (optional)
 func EncodeDPoPPrivateKeyToPEM(key *ecdsa.PrivateKey) (string, error) {
-	b, err := x509.MarshalECPrivateKey(key)
-	if err != nil {
-		return "", err
-	}
-	pemBlock := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: b})
-	return base64.RawURLEncoding.EncodeToString(pemBlock), nil
+	keyPair := &oauth.DPoPKeyPair{PrivateKey: key}
+	return keyPair.EncodeToPEM()
 }
 
 // DecodeDPoPPrivateKeyFromPEM decodes a PEM-encoded private key
 func DecodeDPoPPrivateKeyFromPEM(pemStr string) (*ecdsa.PrivateKey, error) {
-	pemBytes, err := base64.RawURLEncoding.DecodeString(pemStr)
+	keyPair, err := oauth.DecodeFromPEM(pemStr)
 	if err != nil {
+		// Convert the generic error to our specific error for backward compatibility
+		if strings.Contains(err.Error(), "invalid PEM block") {
+			return nil, ErrInvalidPEMBlock
+		}
 		return nil, err
 	}
-	block, _ := pem.Decode(pemBytes)
-	if block == nil {
-		return nil, ErrInvalidPEMBlock
-	}
-	return x509.ParseECPrivateKey(block.Bytes)
+	return keyPair.PrivateKey, nil
 }
-
-// DPoPPublicJWK returns the public key as a JWK map (for DPoP JWT header)
-func (k *DPoPKeyPair) DPoPPublicJWK() map[string]interface{} {
-	pub := k.PrivateKey.PublicKey
-	return map[string]interface{}{
-		"kty": "EC",
-		"crv": "P-256",
-		"x":   base64.RawURLEncoding.EncodeToString(pub.X.Bytes()),
-		"y":   base64.RawURLEncoding.EncodeToString(pub.Y.Bytes()),
-		"alg": "ES256",
-		"use": "sig",
-	}
-}
-
-const dpopKeyCookieName = "dpop_key"
-const dpopNonceCookieName = "dpop_nonce"
-const authServerIssuerCookieName = "auth_server_issuer"
 
 // SetDPoPKeyCookie stores the DPoP private key in a secure, HttpOnly cookie
 func SetDPoPKeyCookie(w http.ResponseWriter, key *ecdsa.PrivateKey, isDev bool) error {
-	pemStr, err := EncodeDPoPPrivateKeyToPEM(key)
-	if err != nil {
-		return err
-	}
-	secure := !isDev
-	http.SetCookie(w, &http.Cookie{
-		Name:     dpopKeyCookieName,
-		Value:    pemStr,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   600, // 10 minutes for OAuth flow
-	})
-	return nil
+	return oauth.SetDPoPKeyCookie(w, key, isDev)
 }
 
 // GetDPoPKeyFromCookie retrieves and decodes the DPoP private key from the cookie
 func GetDPoPKeyFromCookie(r *http.Request) (*ecdsa.PrivateKey, error) {
-	cookie, err := r.Cookie(dpopKeyCookieName)
-	if err != nil {
-		return nil, err
-	}
-	return DecodeDPoPPrivateKeyFromPEM(cookie.Value)
+	return oauth.GetDPoPKeyFromCookie(r)
 }
 
 // ClearDPoPKeyCookie clears the DPoP key cookie
 func ClearDPoPKeyCookie(w http.ResponseWriter, isDev bool) {
-	secure := !isDev
-	http.SetCookie(w, &http.Cookie{
-		Name:     dpopKeyCookieName,
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-	})
+	oauth.ClearDPoPKeyCookie(w, isDev)
 }
 
 // SetDPoPNonceCookie stores the DPoP nonce in a secure, HttpOnly cookie
 func SetDPoPNonceCookie(w http.ResponseWriter, nonce string, isDev bool) error {
-	secure := !isDev
-	http.SetCookie(w, &http.Cookie{
-		Name:     dpopNonceCookieName,
-		Value:    nonce,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   600, // 10 minutes for OAuth flow
-	})
-	return nil
+	return oauth.SetDPoPNonceCookie(w, nonce, isDev)
 }
 
 // GetDPoPNonceFromCookie retrieves the DPoP nonce from the cookie
 func GetDPoPNonceFromCookie(r *http.Request) (string, error) {
-	cookie, err := r.Cookie(dpopNonceCookieName)
-	if err != nil {
-		return "", err
-	}
-	return cookie.Value, nil
+	return oauth.GetDPoPNonceFromCookie(r)
 }
 
 // ClearDPoPNonceCookie clears the DPoP nonce cookie
 func ClearDPoPNonceCookie(w http.ResponseWriter, isDev bool) {
-	secure := !isDev
-	http.SetCookie(w, &http.Cookie{
-		Name:     dpopNonceCookieName,
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-	})
+	oauth.ClearDPoPNonceCookie(w, isDev)
 }
 
 // SetAuthServerIssuerCookie stores the auth server issuer in a secure, HttpOnly cookie
 func SetAuthServerIssuerCookie(w http.ResponseWriter, issuer string, isDev bool) error {
-	secure := !isDev
-	http.SetCookie(w, &http.Cookie{
-		Name:     authServerIssuerCookieName,
-		Value:    issuer,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   600, // 10 minutes for OAuth flow
-	})
-	return nil
+	return oauth.SetAuthServerIssuerCookie(w, issuer, isDev)
 }
 
 // GetAuthServerIssuerFromCookie retrieves the auth server issuer from the cookie
 func GetAuthServerIssuerFromCookie(r *http.Request) (string, error) {
-	cookie, err := r.Cookie(authServerIssuerCookieName)
-	if err != nil {
-		return "", err
-	}
-	return cookie.Value, nil
-}
-
-// DPoPJWTHeader represents the header of a DPoP JWT
-type DPoPJWTHeader struct {
-	Typ string                 `json:"typ"`
-	Alg string                 `json:"alg"`
-	JWK map[string]interface{} `json:"jwk"`
-}
-
-// DPoPJWTPayload represents the payload of a DPoP JWT
-type DPoPJWTPayload struct {
-	JTI   string `json:"jti"`
-	HTM   string `json:"htm"`
-	HTU   string `json:"htu"`
-	IAT   int64  `json:"iat"`
-	Nonce string `json:"nonce,omitempty"`
-	Ath   string `json:"ath,omitempty"` // Access token hash (base64url(SHA256(access_token)))
+	return oauth.GetAuthServerIssuerFromCookie(r)
 }
 
 // CreateDPoPJWT creates a DPoP JWT for the given HTTP method and URL
 func CreateDPoPJWT(key *ecdsa.PrivateKey, method, targetURL string) (string, error) {
-	return CreateDPoPJWTWithNonce(key, method, targetURL, "")
+	keyPair := &oauth.DPoPKeyPair{PrivateKey: key}
+	return keyPair.CreateDPoPJWT(method, targetURL)
 }
 
 // CreateDPoPJWTWithNonce creates a DPoP JWT for the given HTTP method and URL with optional nonce
 func CreateDPoPJWTWithNonce(key *ecdsa.PrivateKey, method, targetURL, nonce string) (string, error) {
-	return CreateDPoPJWTWithAccessToken(key, method, targetURL, nonce, "")
+	keyPair := &oauth.DPoPKeyPair{PrivateKey: key}
+	return keyPair.CreateDPoPJWTWithNonce(method, targetURL, nonce)
 }
 
 // CreateDPoPJWTWithAccessToken creates a DPoP JWT with access token hash (ath claim)
 func CreateDPoPJWTWithAccessToken(key *ecdsa.PrivateKey, method, targetURL, nonce, accessToken string) (string, error) {
-	// Parse the URL to get the scheme, host, and path (no query or fragment)
-	u, err := url.Parse(targetURL)
-	if err != nil {
-		return "", fmt.Errorf("invalid target URL: %w", err)
-	}
-	
-	// HTU should be scheme + host + path (no query or fragment)
-	htu := fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, u.Path)
-	
-	// Create the key pair wrapper to get JWK
-	keyPair := &DPoPKeyPair{PrivateKey: key}
-	
-	// Create header
-	header := DPoPJWTHeader{
-		Typ: "dpop+jwt",
-		Alg: "ES256",
-		JWK: keyPair.DPoPPublicJWK(),
-	}
-	
-	// Generate random JTI (nonce)
-	jtiBytes := make([]byte, 16)
-	if _, err := rand.Read(jtiBytes); err != nil {
-		return "", fmt.Errorf("failed to generate JTI: %w", err)
-	}
-	jti := base64.RawURLEncoding.EncodeToString(jtiBytes)
-	
-	// Calculate access token hash if provided
-	var ath string
-	if accessToken != "" {
-		hash := sha256.Sum256([]byte(accessToken))
-		ath = base64.RawURLEncoding.EncodeToString(hash[:])
-	}
-
-	// Create payload
-	payload := DPoPJWTPayload{
-		JTI:   jti,
-		HTM:   method,
-		HTU:   htu,
-		IAT:   time.Now().Unix(),
-		Nonce: nonce,
-		Ath:   ath,
-	}
-	
-	// Encode header and payload
-	headerBytes, err := json.Marshal(header)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal header: %w", err)
-	}
-	
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal payload: %w", err)
-	}
-	
-	headerEncoded := base64.RawURLEncoding.EncodeToString(headerBytes)
-	payloadEncoded := base64.RawURLEncoding.EncodeToString(payloadBytes)
-	
-	// Create signing input
-	signingInput := headerEncoded + "." + payloadEncoded
-	
-	// Sign
-	hash := sha256.Sum256([]byte(signingInput))
-	r, s, err := ecdsa.Sign(rand.Reader, key, hash[:])
-	if err != nil {
-		return "", fmt.Errorf("failed to sign DPoP JWT: %w", err)
-	}
-	
-	// Encode signature in IEEE P1363 format (fixed 32+32 bytes for P-256)
-	signature := make([]byte, 64) // 32 bytes for r + 32 bytes for s
-	rBytes := r.Bytes()
-	sBytes := s.Bytes()
-	
-	// Pad r to 32 bytes (copy to end to preserve leading zeros)
-	copy(signature[32-len(rBytes):32], rBytes)
-	// Pad s to 32 bytes
-	copy(signature[64-len(sBytes):64], sBytes)
-	
-	signatureEncoded := base64.RawURLEncoding.EncodeToString(signature)
-	
-	return signingInput + "." + signatureEncoded, nil
+	keyPair := &oauth.DPoPKeyPair{PrivateKey: key}
+	return keyPair.CreateDPoPJWTWithAccessToken(method, targetURL, nonce, accessToken)
 }
 
 // CalculateJWKThumbprint calculates the SHA-256 thumbprint of a JWK
-// This should match the 'jkt' claim in the access token
-func CalculateJWKThumbprint(jwk map[string]interface{}) (string, error) {
-	// Create a canonical JSON representation of the JWK
-	// Per RFC 7638, only include the required fields in alphabetical order
-	canonical := map[string]interface{}{
-		"crv": jwk["crv"],
-		"kty": jwk["kty"],
-		"x":   jwk["x"],
-		"y":   jwk["y"],
-	}
-	
-	// Marshal to JSON (Go's json.Marshal produces consistent output)
-	jsonBytes, err := json.Marshal(canonical)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal canonical JWK: %w", err)
-	}
-	
-	// Calculate SHA-256 hash
-	hash := sha256.Sum256(jsonBytes)
-	
-	// Return base64url-encoded thumbprint
-	return base64.RawURLEncoding.EncodeToString(hash[:]), nil
-}
-
-// GetJWKThumbprint returns the JWK thumbprint for this DPoP key
-func (k *DPoPKeyPair) GetJWKThumbprint() (string, error) {
-	jwk := k.DPoPPublicJWK()
-	return CalculateJWKThumbprint(jwk)
+func CalculateJWKThumbprint(_ map[string]interface{}) (string, error) {
+	// Legacy function - deprecated in favor of DPoPKeyPair.CalculateJWKThumbprint()
+	return "", fmt.Errorf("deprecated: use DPoPKeyPair.CalculateJWKThumbprint() instead")
 }
 
 // GetDPoPKeyFromRequest retrieves the DPoP private key from the request context or cookies
@@ -369,7 +156,7 @@ func GetDPoPKeyFromRequest(r *http.Request) (string, error) {
 	
 	// Convert to JWK JSON format for tangled library
 	keyPair := &DPoPKeyPair{PrivateKey: dpopKey}
-	jwk := keyPair.DPoPPublicJWK()
+	jwk := keyPair.PublicJWK()
 	
 	// Add private key component
 	jwk["d"] = base64.RawURLEncoding.EncodeToString(dpopKey.D.Bytes())
@@ -381,4 +168,172 @@ func GetDPoPKeyFromRequest(r *http.Request) (string, error) {
 	}
 	
 	return string(jwkBytes), nil
+}
+
+// SessionWrapper wraps pkg/atproto.Session while maintaining cookie-based session management
+// This provides enhanced functionality while preserving existing session interface
+type SessionWrapper struct {
+	atprotoSession *atproto.Session
+	accessToken    string
+	refreshToken   string
+	userDID        string
+	dpopKey        *ecdsa.PrivateKey
+}
+
+// NewSessionWrapper creates a new session wrapper from authentication tokens
+func NewSessionWrapper(accessToken, refreshToken, userDID string, dpopKey *ecdsa.PrivateKey, atprotoClient *atproto.Client) (*SessionWrapper, error) {
+	// Create the internal atproto.Session
+	// Note: We'll need to create this through the client's exchange process or mock it for compatibility
+	// For now, we create a wrapper that manages both interfaces
+	wrapper := &SessionWrapper{
+		accessToken:  accessToken,
+		refreshToken: refreshToken,
+		userDID:      userDID,
+		dpopKey:      dpopKey,
+	}
+	
+	// If we have an atproto client, we can create a proper session
+	// This will be populated during OAuth flow
+	if atprotoClient != nil {
+		// The atproto.Session would typically be created during ExchangeCode
+		// For now, we store the client reference for later use
+		wrapper.atprotoSession = nil // Will be set during proper OAuth flow
+	}
+	
+	return wrapper, nil
+}
+
+// GetAccessToken returns the current access token
+func (sw *SessionWrapper) GetAccessToken() string {
+	if sw.atprotoSession != nil {
+		return sw.atprotoSession.GetAccessToken()
+	}
+	return sw.accessToken
+}
+
+// GetRefreshToken returns the current refresh token
+func (sw *SessionWrapper) GetRefreshToken() string {
+	if sw.atprotoSession != nil {
+		return sw.atprotoSession.GetRefreshToken()
+	}
+	return sw.refreshToken
+}
+
+// GetUserDID returns the user's DID
+func (sw *SessionWrapper) GetUserDID() string {
+	if sw.atprotoSession != nil {
+		return sw.atprotoSession.GetUserDID()
+	}
+	return sw.userDID
+}
+
+// GetDPoPKey returns the DPoP private key
+func (sw *SessionWrapper) GetDPoPKey() *ecdsa.PrivateKey {
+	if sw.atprotoSession != nil {
+		return sw.atprotoSession.GetDPoPKey()
+	}
+	return sw.dpopKey
+}
+
+// CreateRecord creates a record using the internal atproto.Session if available
+func (sw *SessionWrapper) CreateRecord(collection, rkey string, record interface{}) (*atproto.RecordResult, error) {
+	if sw.atprotoSession != nil {
+		return sw.atprotoSession.CreateRecord(collection, rkey, record)
+	}
+	return nil, fmt.Errorf("atproto session not available for CreateRecord")
+}
+
+// GetRecord retrieves a record using the internal atproto.Session if available
+func (sw *SessionWrapper) GetRecord(collection, rkey string, result interface{}) error {
+	if sw.atprotoSession != nil {
+		return sw.atprotoSession.GetRecord(collection, rkey, result)
+	}
+	return fmt.Errorf("atproto session not available for GetRecord")
+}
+
+// ListRecords lists records using the internal atproto.Session if available
+func (sw *SessionWrapper) ListRecords(collection string, limit int, cursor string) (*atproto.ListRecordsResult, error) {
+	if sw.atprotoSession != nil {
+		return sw.atprotoSession.ListRecords(collection, limit, cursor)
+	}
+	return nil, fmt.Errorf("atproto session not available for ListRecords")
+}
+
+// UpdateRecord updates a record using the internal atproto.Session if available
+func (sw *SessionWrapper) UpdateRecord(collection, rkey string, record interface{}) (*atproto.RecordResult, error) {
+	if sw.atprotoSession != nil {
+		return sw.atprotoSession.UpdateRecord(collection, rkey, record)
+	}
+	return nil, fmt.Errorf("atproto session not available for UpdateRecord")
+}
+
+// DeleteRecord deletes a record using the internal atproto.Session if available
+func (sw *SessionWrapper) DeleteRecord(collection, rkey string) error {
+	if sw.atprotoSession != nil {
+		return sw.atprotoSession.DeleteRecord(collection, rkey)
+	}
+	return fmt.Errorf("atproto session not available for DeleteRecord")
+}
+
+// SetAtprotoSession sets the internal atproto.Session (used during OAuth flow)
+func (sw *SessionWrapper) SetAtprotoSession(session *atproto.Session) {
+	sw.atprotoSession = session
+}
+
+// GetAtprotoSession returns the internal atproto.Session (if available)
+func (sw *SessionWrapper) GetAtprotoSession() *atproto.Session {
+	return sw.atprotoSession
+}
+
+// SaveToCookies saves session data to HTTP cookies
+func (sw *SessionWrapper) SaveToCookies(w http.ResponseWriter, isDev bool) error {
+	// Use existing cookie management functions
+	SetSessionCookieWithEnv(w, sw.GetAccessToken(), []string{sw.GetRefreshToken()}, isDev)
+	
+	// Save DPoP key if available
+	if sw.GetDPoPKey() != nil {
+		if err := SetDPoPKeyCookie(w, sw.GetDPoPKey(), isDev); err != nil {
+			return fmt.Errorf("failed to save DPoP key to cookie: %w", err)
+		}
+	}
+	
+	return nil
+}
+
+// LoadSessionFromCookies creates session wrapper from HTTP cookies  
+func LoadSessionFromCookies(r *http.Request) (*SessionWrapper, error) {
+	// Get access token from cookie
+	accessToken, err := GetSessionCookie(r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get access token from cookie: %w", err)
+	}
+	
+	// Get refresh token (optional)
+	refreshToken, _ := GetRefreshTokenCookie(r)
+	
+	// Get DPoP key (optional)
+	dpopKey, _ := GetDPoPKeyFromCookie(r)
+	
+	// Extract user DID from access token (JWT parsing)
+	userDID := ""
+	// Simple JWT parsing to get subject
+	parts := strings.Split(accessToken, ".")
+	if len(parts) >= 2 {
+		// Decode payload
+		payload := parts[1]
+		// Add padding if needed for base64 decoding
+		for len(payload)%4 != 0 {
+			payload += "="
+		}
+		if decoded, err := base64.StdEncoding.DecodeString(payload); err == nil {
+			var claims map[string]interface{}
+			if err := json.Unmarshal(decoded, &claims); err == nil {
+				if sub, ok := claims["sub"].(string); ok {
+					userDID = sub
+				}
+			}
+		}
+	}
+	
+	return NewSessionWrapper(accessToken, refreshToken, userDID, dpopKey, nil)
 }

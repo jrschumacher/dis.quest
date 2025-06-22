@@ -1,13 +1,12 @@
 module github.com/jrschumacher/dis.quest
 
-go 1.24.0
-
-toolchain go1.24.4
+go 1.24.4
 
 require (
 	github.com/a-h/templ v0.3.898
 	github.com/creasty/defaults v1.8.0
 	github.com/go-playground/validator/v10 v10.26.0
+	github.com/jrschumacher/dis.quest/pkg/atproto v0.0.0-00010101000000-000000000000
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.28
@@ -15,7 +14,6 @@ require (
 	github.com/spf13/viper v1.20.1
 	github.com/starfederation/datastar v1.0.0-beta.11
 	golang.org/x/oauth2 v0.30.0
-	tangled.sh/icyphox.sh/atproto-oauth v0.0.0-20250526154904-3906c5336421
 )
 
 require (
@@ -101,7 +99,11 @@ require (
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.2.1 // indirect
+	tangled.sh/icyphox.sh/atproto-oauth v0.0.0-20250526154904-3906c5336421 // indirect
 )
 
 // Let tangled-sh library use its preferred indigo version to avoid conflicts
 replace github.com/bluesky-social/indigo => github.com/bluesky-social/indigo v0.0.0-20250520232546-236dd575c91e
+
+// Use our local atproto package for testing
+replace github.com/jrschumacher/dis.quest/pkg/atproto => ./pkg/atproto

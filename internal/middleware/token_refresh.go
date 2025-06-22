@@ -7,7 +7,7 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/auth"
 	"github.com/jrschumacher/dis.quest/internal/logger"
 	"github.com/jrschumacher/dis.quest/internal/oauth"
-	"golang.org/x/oauth2"
+	"github.com/jrschumacher/dis.quest/pkg/atproto"
 )
 
 // TokenRefreshMiddleware automatically refreshes access tokens when they're close to expiring
@@ -52,27 +52,40 @@ func TokenRefreshMiddleware(oauthService *oauth.Service) func(http.Handler) http
 				return
 			}
 
-			// Convert TokenResult back to oauth2.Token for compatibility
-			token := &oauth2.Token{
-				AccessToken:  tokenResult.AccessToken,
-				RefreshToken: tokenResult.RefreshToken,
+			// Create enhanced session wrapper with refreshed tokens
+			sessionWrapper, err := auth.NewSessionWrapper(
+				tokenResult.AccessToken,
+				tokenResult.RefreshToken,
+				tokenResult.UserDID,
+				tokenResult.DPoPKey,
+				nil, // atproto client
+			)
+			if err != nil {
+				logger.Error("Failed to create session wrapper after refresh", "error", err)
+				// Fall back to clearing session
+				auth.ClearSessionCookie(w)
+				http.Redirect(w, r, "/login", http.StatusFound)
+				return
 			}
 
-			// Update cookies with new tokens
-			newRefreshTokens := []string{}
-			if token.RefreshToken != "" {
-				newRefreshTokens = append(newRefreshTokens, token.RefreshToken)
-			}
-			auth.SetSessionCookieWithEnv(w, token.AccessToken, newRefreshTokens, false)
-
-			// Preserve the DPoP key from the refresh result
-			if tokenResult.DPoPKey != nil {
-				if err := auth.SetDPoPKeyCookie(w, tokenResult.DPoPKey, false); err != nil {
-					logger.Error("Failed to set DPoP key cookie after refresh", "error", err)
+			// Set the atproto session if available from token result
+			if tokenResult.AtprotoSession != nil {
+				if atprotoSession, ok := tokenResult.AtprotoSession.(*atproto.Session); ok {
+					sessionWrapper.SetAtprotoSession(atprotoSession)
 				}
+				logger.Info("Enhanced session refreshed with atproto.Session", "userDID", tokenResult.UserDID)
 			}
 
-			logger.Info("Token refresh successful, DPoP key preserved")
+			// Save refreshed session to cookies using the wrapper
+			if err := sessionWrapper.SaveToCookies(w, false); err != nil {
+				logger.Error("Failed to save refreshed session to cookies", "error", err)
+				// Fall back to clearing session
+				auth.ClearSessionCookie(w)
+				http.Redirect(w, r, "/login", http.StatusFound)
+				return
+			}
+
+			logger.Info("Token refresh successful with enhanced session wrapper")
 
 			// Continue with the refreshed token
 			next.ServeHTTP(w, r)

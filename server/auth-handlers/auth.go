@@ -18,7 +18,7 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/logger"
 	"github.com/jrschumacher/dis.quest/internal/oauth"
 	"github.com/jrschumacher/dis.quest/internal/svrlib"
-	"golang.org/x/oauth2"
+	"github.com/jrschumacher/dis.quest/pkg/atproto"
 )
 
 // Router handles authentication-related HTTP routes
@@ -314,17 +314,34 @@ func (rt *Router) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	logger.Info("Token exchange successful", "handle", handle, "provider", oauthService.GetProviderName())
 	
-	// Convert TokenResult back to oauth2.Token for compatibility with existing code
-	token := &oauth2.Token{
-		AccessToken:  tokenResult.AccessToken,
-		RefreshToken: tokenResult.RefreshToken,
+	// Create enhanced session wrapper with pkg/atproto.Session integration
+	sessionWrapper, err := auth.NewSessionWrapper(
+		tokenResult.AccessToken, 
+		tokenResult.RefreshToken, 
+		tokenResult.UserDID, 
+		tokenResult.DPoPKey, 
+		nil, // atproto client will be set if available in tokenResult
+	)
+	if err != nil {
+		logger.Error("Failed to create session wrapper", "handle", handle, "error", err)
+		writeError(w, http.StatusInternalServerError, "Session creation failed", "handle", handle, "error", err)
+		return
 	}
-	refreshToken := ""
-	if token.RefreshToken != "" {
-		refreshToken = token.RefreshToken
+	
+	// Set the atproto session if available from token result
+	if tokenResult.AtprotoSession != nil {
+		if atprotoSession, ok := tokenResult.AtprotoSession.(*atproto.Session); ok {
+			sessionWrapper.SetAtprotoSession(atprotoSession)
+			logger.Info("Enhanced session created with atproto.Session", "handle", handle, "userDID", tokenResult.UserDID)
+		}
 	}
-	// Use config for secure flag
-	auth.SetSessionCookieWithEnv(w, token.AccessToken, []string{refreshToken}, cfg.AppEnv == "development")
+	
+	// Save session to cookies using the wrapper
+	if err := sessionWrapper.SaveToCookies(w, cfg.AppEnv == "development"); err != nil {
+		logger.Error("Failed to save session to cookies", "handle", handle, "error", err)
+		writeError(w, http.StatusInternalServerError, "Session storage failed", "handle", handle, "error", err)
+		return
+	}
 	
 	// Check for redirect URL and use it, otherwise default to /discussion
 	redirectURL := "/discussion"
