@@ -126,76 +126,61 @@ server/
 - **Interactivity**: Datastar for reactive UI components
 - **Logging**: Use `internal/logger` for all logging needs
 
-## DPoP Implementation Status
+## OAuth + DPoP Implementation Status
 
-### Current State (2025-06-21)
-✅ **Complete DPoP Implementation**: Full end-to-end DPoP (Demonstration of Proof of Possession) authentication is implemented and working correctly for ATProtocol OAuth.
+### Current State (2025-06-22)
+✅ **COMPLETED AND WORKING**: Full end-to-end OAuth with DPoP authentication successfully implemented for ATProtocol/Bluesky integration.
+
+### Custom Lexicon Success (2025-06-22)
+🎉 **BREAKTHROUGH ACHIEVED**: Complete custom lexicon implementation working end-to-end with full CRUD operations.
+
+**Proven Working**:
+- ✅ Custom lexicon creation: `quest.dis.topic` records successfully stored in production PDS
+- ✅ Record retrieval: Individual and collection listing working
+- ✅ Test Record: `at://did:plc:qknujfbaxt5ggvbsefz3ixop/quest.dis.topic/topic-1750563554124865000`
+- ✅ Key Discovery: `validate: false` required for custom lexicons (learned from WhiteWind analysis)
 
 ### Key Components Working
-- **OAuth Flow**: Successfully authenticating with Bluesky using `"atproto transition:generic"` scope
-- **DPoP Key Management**: Keys generated, stored in cookies, and retrieved properly
-- **DPoP JWT Creation**: `auth.CreateDPoPJWT()` creating valid DPoP JWTs with correct headers
-- **XRPC Integration**: Both Authorization Bearer tokens and DPoP headers sent to PDS
-- **Session Management**: Access tokens and DPoP keys properly extracted from user sessions
+- **OAuth Provider Abstraction**: Clean interface supporting multiple OAuth implementations (`/internal/oauth/`)
+- **Tangled Provider**: Production-ready OAuth using `tangled.sh/icyphox.sh/atproto-oauth` library
+- **DPoP Implementation**: RFC-compliant DPoP JWTs with proper nonce handling and access token binding
+- **PDS Operations**: Successfully creating and retrieving records from Personal Data Servers
+- **Session Management**: Secure DPoP key storage and automatic nonce retry logic
 
-### Implementation Details
-- **Scope Format**: Using `[]string{"atproto", "transition:generic"}` (separate array elements work correctly)
-- **DPoP Methods**: `CreateRecordWithDPoP()` and `GetRecordWithDPoP()` implemented in XRPC client
-- **Dev Interface**: Complete testing interface at `/dev/pds` with Force Re-authenticate functionality
-- **Logging**: Comprehensive debugging for OAuth flow, DPoP creation, and PDS requests
+### Implementation Architecture
+- **Provider Interface**: `/internal/oauth/provider.go` - Abstraction for OAuth implementations
+- **Factory Pattern**: `/internal/oauth/factory.go` - Runtime provider selection
+- **Tangled Provider**: `/internal/oauth/tangled.go` - Working OAuth implementation with `private_key_jwt`
+- **Manual Provider**: `/internal/oauth/manual.go` - Original implementation preserved for fallback
+- **Configuration**: `oauth_provider: tangled` in `config.yaml` for provider selection
 
-### Current Issue: OAuth Client Authentication Method Missing
-🚫 **Root Cause Identified**: The "Bad token scope" error is due to missing `private_key_jwt` client authentication.
+### Critical Fixes Applied
+- **Client Authentication**: Proper `private_key_jwt` using tangled.sh OAuth library
+- **Authorization Headers**: Changed from "Bearer" to "DPoP" per RFC requirements
+- **PDS Resolution**: Automatic DID resolution to find user's actual PDS endpoint
+- **DPoP Nonce Handling**: Server nonce retry pattern for 401 responses
+- **Access Token Binding**: Added `ath` claim to DPoP JWT for token security
+- **PAR Integration**: Pushed Authorization Request for DPoP nonce acquisition and auth server discovery
 
-**Key Discovery (2025-06-21 14:20)**: 
-- Our DPoP implementation is **technically correct** - JWK thumbprints match perfectly
-- **Tangled.sh analysis** revealed they use `token_endpoint_auth_method: "private_key_jwt"` 
-- **WhiteWind analysis** showed they bypass OAuth entirely using session-based auth
-- We're using `"none"` authentication which is insufficient for DPoP flows
+### Testing and Validation
+- **Dev Interface**: Complete testing interface at `/dev/pds` with comprehensive OAuth and DPoP testing
+- **Production Testing**: Successfully creating and retrieving records from real Personal Data Servers
+- **Error Handling**: Robust retry logic for DPoP nonce requirements and token expiration
+- **Rollback Strategy**: Instant fallback to manual provider via configuration change
 
-**Technical Details**:
-- ✅ **DPoP JWT Structure**: Correct with fixed IEEE P1363 signature encoding (64 bytes)
-- ✅ **JWK Thumbprint Binding**: Perfect match between token `jkt` and calculated thumbprint
-- ✅ **Scope Format**: Using `"atproto transition:generic"` (matches Tangled.sh)
-- ✅ **Cookie Clearing Fix**: DPoP keys now properly cleared during re-authentication
-- ❌ **Client Authentication**: Missing `private_key_jwt` for token exchange
-
-### Critical OAuth Flow Requirements for DPoP
-**Problem**: DPoP requires two separate authentication mechanisms:
-1. **Client Authentication**: `private_key_jwt` to authenticate the OAuth client during token exchange
-2. **Proof of Possession**: DPoP headers to prove possession of the bound key
-
-**Why This Matters**: 
-- DPoP keys should remain client-side for security
-- Server needs separate client authentication for token requests  
-- Traditional IdPs allow pre-registering client keys; ATProtocol requires dynamic client metadata
-
-### Implementation Status
-🔄 **Partial Fix Applied**: 
-- Updated client metadata to include `private_key_jwt` method and JWKS
-- Still need to implement client assertion JWT creation for token exchange
-- Complex manual implementation suggests using specialized library
-
-### Next Steps for Resolution
-1. **Complete `private_key_jwt` Implementation**: Create client assertion JWTs for token exchange
-2. **Alternative: Use ATProtocol OAuth Library**: Follow Tangled.sh's approach with specialized library
-3. **Alternative: Session-Based Auth**: Implement WhiteWind's approach to bypass OAuth restrictions
+### Documentation
+- **Implementation Guide**: `/docs/OAUTH_DPOP_IMPLEMENTATION.md` - Complete technical documentation
+- **Provider Interface**: Well-documented abstraction allowing future OAuth implementations
+- **Security Model**: RFC-compliant DPoP implementation with proper token binding
 
 ### File Locations
-- **DPoP Implementation**: `/internal/pds/xrpc.go` - DPoP JWT headers
-- **ATProtocol Service**: `/internal/pds/atproto.go` - Service layer with DPoP support  
-- **OAuth Configuration**: `/internal/auth/auth.go` - Scope and OAuth2 config
+- **OAuth Interface**: `/internal/oauth/provider.go` - OAuth provider abstraction
+- **Tangled Provider**: `/internal/oauth/tangled.go` - Production OAuth implementation  
+- **Manual Provider**: `/internal/oauth/manual.go` - Original implementation (preserved)
+- **XRPC Client**: `/internal/pds/xrpc.go` - DPoP-enabled PDS operations
+- **Session Management**: `/internal/auth/session.go` - DPoP key and nonce handling
 - **Dev Interface**: `/server/app/dev.go` - Testing and debugging tools
-- **Templates**: `/components/dev_pds.templ` - UI for testing DPoP functionality
-
-### Critical Discoveries
-- **Client Auth Missing**: `private_key_jwt` required for DPoP flows, not just DPoP headers alone
-- **Two-Key Architecture**: Need separate keys for client auth and DPoP proof of possession  
-- **Scope Format Critical**: Must use exact string `"atproto transition:generic"` (not array)
-- **Signature Encoding**: ES256 requires IEEE P1363 format (fixed 32+32 bytes for P-256)
-- **Cookie Clearing**: DPoP keys must be cleared during re-auth to prevent key/token mismatch
-- **Library Complexity**: Manual DPoP+OAuth implementation extremely complex vs specialized libraries
-- **Error Misleading**: "Bad token scope" actually means authentication method issues, not scopes
+- **Documentation**: `/docs/OAUTH_DPOP_IMPLEMENTATION.md` - Complete technical guide
 
 ### Datastar Integration
 

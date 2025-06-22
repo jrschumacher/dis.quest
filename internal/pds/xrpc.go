@@ -64,10 +64,9 @@ func ParseATUri(uri string) (*ATUriComponents, error) {
 
 // ResolvePDS resolves the PDS endpoint for a given DID
 func (c *XRPCClient) ResolvePDS(did string) (string, error) {
-	// For now, use Bluesky as default for did:plc DIDs
-	// In production, this should do proper DID resolution
+	// Resolve DID to get actual PDS endpoint
 	if strings.HasPrefix(did, "did:plc:") {
-		return "https://bsky.social", nil
+		return c.resolvePlcDID(did)
 	}
 	if strings.HasPrefix(did, "did:web:") {
 		// Extract domain from did:web
@@ -78,6 +77,42 @@ func (c *XRPCClient) ResolvePDS(did string) (string, error) {
 }
 
 // CreateRecordRequest represents the request body for com.atproto.repo.createRecord
+// resolvePlcDID resolves a did:plc DID to get the PDS endpoint
+func (c *XRPCClient) resolvePlcDID(did string) (string, error) {
+	// Query the PLC directory
+	plcURL := fmt.Sprintf("https://plc.directory/%s", did)
+	
+	resp, err := c.client.Get(plcURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve DID %s: %w", did, err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to resolve DID %s: status %d", did, resp.StatusCode)
+	}
+	
+	var didDoc struct {
+		Service []struct {
+			Type            string `json:"type"`
+			ServiceEndpoint string `json:"serviceEndpoint"`
+		} `json:"service"`
+	}
+	
+	if err := json.NewDecoder(resp.Body).Decode(&didDoc); err != nil {
+		return "", fmt.Errorf("failed to decode DID document for %s: %w", did, err)
+	}
+	
+	// Find the AtprotoPersonalDataServer service
+	for _, service := range didDoc.Service {
+		if service.Type == "AtprotoPersonalDataServer" {
+			return service.ServiceEndpoint, nil
+		}
+	}
+	
+	return "", fmt.Errorf("no PDS endpoint found in DID document for %s", did)
+}
+
 type CreateRecordRequest struct {
 	Repo       string                 `json:"repo"`
 	Collection string                 `json:"collection"`
@@ -97,7 +132,7 @@ func (c *XRPCClient) CreateRecord(ctx context.Context, req CreateRecordRequest, 
 	return c.CreateRecordWithDPoP(ctx, req, accessToken, nil)
 }
 
-// CreateRecordWithDPoP creates a record with DPoP authentication
+// CreateRecordWithDPoP creates a record with DPoP authentication with nonce retry support
 func (c *XRPCClient) CreateRecordWithDPoP(ctx context.Context, req CreateRecordRequest, accessToken string, dpopKey interface{}) (*CreateRecordResponse, error) {
 	pdsEndpoint, err := c.ResolvePDS(req.Repo)
 	if err != nil {
@@ -110,61 +145,72 @@ func (c *XRPCClient) CreateRecordWithDPoP(ctx context.Context, req CreateRecordR
 	}
 
 	url := fmt.Sprintf("%s/xrpc/com.atproto.repo.createRecord", pdsEndpoint)
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	if accessToken != "" {
-		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
-	}
 	
-	// Add DPoP header if DPoP key is provided
-	if dpopKey != nil {
-		if ecdsaKey, ok := dpopKey.(*ecdsa.PrivateKey); ok {
-			logger.Info("Creating DPoP JWT", "method", "POST", "url", url)
-			
-			// Debug: Log the DPoP key details
-			if ecdsaKey.PublicKey.X != nil && ecdsaKey.PublicKey.Y != nil {
-				logger.Info("DPoP key details", 
-					"keyX", ecdsaKey.PublicKey.X.String()[:10]+"...",
-					"keyY", ecdsaKey.PublicKey.Y.String()[:10]+"...")
-			}
-			
-			dpopJWT, err := auth.CreateDPoPJWT(ecdsaKey, "POST", url)
-			if err != nil {
-				logger.Error("Failed to create DPoP JWT", "error", err)
-				return nil, fmt.Errorf("failed to create DPoP JWT: %w", err)
-			}
-			
-			// Debug: Log the DPoP JWT parts
-			jwtParts := strings.Split(dpopJWT, ".")
-			if len(jwtParts) == 3 {
-				logger.Info("DPoP JWT created", 
-					"headerLength", len(jwtParts[0]),
-					"payloadLength", len(jwtParts[1]), 
-					"signatureLength", len(jwtParts[2]))
-			}
-			
-			httpReq.Header.Set("DPoP", dpopJWT)
-			logger.Info("Added DPoP header to request", "jwtLength", len(dpopJWT))
-		} else {
-			logger.Error("DPoP key is not the correct type", "type", fmt.Sprintf("%T", dpopKey))
+	// Helper function to make request with optional nonce
+	makeRequest := func(nonce string) (*http.Response, error) {
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
-	} else {
-		logger.Error("No DPoP key provided to XRPC request")
+
+		httpReq.Header.Set("Content-Type", "application/json")
+		if accessToken != "" {
+			httpReq.Header.Set("Authorization", fmt.Sprintf("DPoP %s", accessToken))
+		}
+		
+		// Add DPoP header if DPoP key is provided
+		if dpopKey != nil {
+			if ecdsaKey, ok := dpopKey.(*ecdsa.PrivateKey); ok {
+				logger.Info("Creating DPoP JWT", "method", "POST", "url", url, "hasNonce", nonce != "")
+				
+				// Debug: Log the DPoP key details
+				if ecdsaKey.PublicKey.X != nil && ecdsaKey.PublicKey.Y != nil {
+					logger.Info("DPoP key details", 
+						"keyX", ecdsaKey.PublicKey.X.String()[:10]+"...",
+						"keyY", ecdsaKey.PublicKey.Y.String()[:10]+"...")
+				}
+				
+				var dpopJWT string
+				dpopJWT, err = auth.CreateDPoPJWTWithAccessToken(ecdsaKey, "POST", url, nonce, accessToken)
+				
+				if err != nil {
+					logger.Error("Failed to create DPoP JWT", "error", err)
+					return nil, fmt.Errorf("failed to create DPoP JWT: %w", err)
+				}
+				
+				// Debug: Log the DPoP JWT parts
+				jwtParts := strings.Split(dpopJWT, ".")
+				if len(jwtParts) == 3 {
+					logger.Info("DPoP JWT created", 
+						"headerLength", len(jwtParts[0]),
+						"payloadLength", len(jwtParts[1]), 
+						"signatureLength", len(jwtParts[2]),
+						"nonce", nonce)
+				}
+				
+				httpReq.Header.Set("DPoP", dpopJWT)
+				logger.Info("Added DPoP header to request", "jwtLength", len(dpopJWT), "nonce", nonce)
+			} else {
+				logger.Error("DPoP key is not the correct type", "type", fmt.Sprintf("%T", dpopKey))
+			}
+		} else {
+			logger.Error("No DPoP key provided to XRPC request")
+		}
+
+		// Log request details
+		logger.Info("Making XRPC createRecord request", 
+			"method", httpReq.Method,
+			"url", httpReq.URL.String(),
+			"hasAuth", httpReq.Header.Get("Authorization") != "",
+			"hasDPoP", httpReq.Header.Get("DPoP") != "",
+			"contentType", httpReq.Header.Get("Content-Type"),
+			"nonce", nonce)
+
+		return c.client.Do(httpReq)
 	}
 
-	// Log request details
-	logger.Info("Making XRPC createRecord request", 
-		"method", httpReq.Method,
-		"url", httpReq.URL.String(),
-		"hasAuth", httpReq.Header.Get("Authorization") != "",
-		"hasDPoP", httpReq.Header.Get("DPoP") != "",
-		"contentType", httpReq.Header.Get("Content-Type"))
-
-	resp, err := c.client.Do(httpReq)
+	// First attempt without nonce
+	resp, err := makeRequest("")
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -173,6 +219,52 @@ func (c *XRPCClient) CreateRecordWithDPoP(ctx context.Context, req CreateRecordR
 			logger.Error("failed to close response body", "error", err)
 		}
 	}()
+
+	// Check for DPoP nonce requirement (can be 400 Bad Request or 401 Unauthorized)
+	if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusUnauthorized {
+		// Read response to check for nonce requirement
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, fmt.Errorf("PDS request failed with status: %d (unable to read error details: %v)", resp.StatusCode, readErr)
+		}
+		
+		// Check if error indicates DPoP nonce is needed
+		var errorResp map[string]interface{}
+		if json.Unmarshal(body, &errorResp) == nil {
+			logger.Info("Checking for DPoP nonce error", "error", errorResp["error"], "message", errorResp["message"])
+			if errorResp["error"] == "use_dpop_nonce" || 
+			   strings.Contains(fmt.Sprintf("%v", errorResp["message"]), "nonce") {
+				// Get nonce from DPoP-Nonce header
+				if dpopNonce := resp.Header.Get("DPoP-Nonce"); dpopNonce != "" {
+					logger.Info("Retrying createRecord with DPoP nonce", "nonce", dpopNonce)
+					
+					// Close the first response and retry with nonce
+					resp.Body.Close()
+					retryResp, retryErr := makeRequest(dpopNonce)
+					if retryErr != nil {
+						return nil, fmt.Errorf("failed to retry request with nonce: %w", retryErr)
+					}
+					
+					// Use the retry response for the rest of the function
+					resp = retryResp
+					defer func() {
+						if err := resp.Body.Close(); err != nil {
+							logger.Error("failed to close retry response body", "error", err)
+						}
+					}()
+				} else {
+					logger.Error("DPoP nonce required but not provided in response header")
+					return nil, fmt.Errorf("PDS request failed with status: %d, response: %s", resp.StatusCode, string(body))
+				}
+			} else {
+				// Not a nonce error, return original error
+				return nil, fmt.Errorf("PDS request failed with status: %d, response: %s", resp.StatusCode, string(body))
+			}
+		} else {
+			// Failed to parse error response
+			return nil, fmt.Errorf("PDS request failed with status: %d, response: %s", resp.StatusCode, string(body))
+		}
+	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		// Read error response body for detailed error information
@@ -224,13 +316,13 @@ func (c *XRPCClient) GetRecordWithDPoP(ctx context.Context, repo, collection, rk
 	}
 
 	if accessToken != "" {
-		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+		httpReq.Header.Set("Authorization", fmt.Sprintf("DPoP %s", accessToken))
 	}
 	
 	// Add DPoP header if DPoP key is provided
 	if dpopKey != nil {
 		if ecdsaKey, ok := dpopKey.(*ecdsa.PrivateKey); ok {
-			dpopJWT, err := auth.CreateDPoPJWT(ecdsaKey, "GET", url)
+			dpopJWT, err := auth.CreateDPoPJWTWithAccessToken(ecdsaKey, "GET", url, "", accessToken)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create DPoP JWT: %w", err)
 			}
@@ -300,7 +392,7 @@ func (c *XRPCClient) PutRecord(ctx context.Context, req PutRecordRequest, access
 
 	httpReq.Header.Set("Content-Type", "application/json")
 	if accessToken != "" {
-		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+		httpReq.Header.Set("Authorization", fmt.Sprintf("DPoP %s", accessToken))
 	}
 
 	resp, err := c.client.Do(httpReq)
@@ -359,7 +451,7 @@ func (c *XRPCClient) ListRecords(ctx context.Context, repo, collection string, l
 	}
 
 	if accessToken != "" {
-		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+		httpReq.Header.Set("Authorization", fmt.Sprintf("DPoP %s", accessToken))
 	}
 
 	resp, err := c.client.Do(httpReq)

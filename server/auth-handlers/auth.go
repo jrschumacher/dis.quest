@@ -2,6 +2,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -9,11 +10,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/jrschumacher/dis.quest/internal/auth"
 	"github.com/jrschumacher/dis.quest/internal/config"
 	"github.com/jrschumacher/dis.quest/internal/logger"
+	"github.com/jrschumacher/dis.quest/internal/oauth"
 	"github.com/jrschumacher/dis.quest/internal/svrlib"
 	"golang.org/x/oauth2"
 )
@@ -21,11 +24,15 @@ import (
 // Router handles authentication-related HTTP routes
 type Router struct {
 	*svrlib.Router
+	oauthService *oauth.Service
 }
 
 // RegisterRoutes registers all /auth/* routes on the given mux, with the prefix handled by the caller.
-func RegisterRoutes(mux *http.ServeMux, prefix string, cfg *config.Config) {
-	router := &Router{svrlib.NewRouter(mux, prefix, cfg)}
+func RegisterRoutes(mux *http.ServeMux, prefix string, cfg *config.Config, oauthService *oauth.Service) {
+	router := &Router{
+		Router:       svrlib.NewRouter(mux, prefix, cfg),
+		oauthService: oauthService,
+	}
 	// Pass config to handlers for env-aware cookie security
 	routerConfig := cfg
 
@@ -157,7 +164,7 @@ func (rt *Router) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to discover authorization server", "handle", handle, "error", err)
 		return
 	}
-	codeVerifier, codeChallenge, err := auth.GeneratePKCE()
+	codeVerifier, _, err := auth.GeneratePKCE()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to generate PKCE challenge", "handle", handle, "error", err)
 		return
@@ -202,13 +209,46 @@ func (rt *Router) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   600, // 10 minutes
 	})
-	conf := auth.OAuth2Config(metadata, cfg)
-	url := conf.AuthCodeURL(state,
-		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
-		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
-		oauth2.SetAuthURLParam("login_hint", handle),
-	)
-	http.Redirect(w, r, url, http.StatusFound)
+	
+	// Use PAR (Pushed Authorization Request) instead of direct OAuth redirect
+	parClient := auth.NewPARClient()
+	
+	// Get PAR endpoint from authorization server metadata
+	parEndpoint := metadata.PushedAuthorizationRequestEndpoint
+	if parEndpoint == "" {
+		// Fallback: construct PAR endpoint from issuer
+		parEndpoint = strings.TrimSuffix(metadata.Issuer, "/") + "/oauth/par"
+	}
+	
+	// Perform PAR request
+	parResp, err := parClient.PerformPAR(r.Context(), parEndpoint, metadata, codeVerifier, state, dpopKey.PrivateKey, cfg)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to perform PAR request", "handle", handle, "error", err)
+		return
+	}
+	
+	// Store DPoP nonce if present (needed for token exchange)
+	if parResp.DPoPNonce != "" {
+		if err := auth.SetDPoPNonceCookie(w, parResp.DPoPNonce, cfg.AppEnv == "development"); err != nil {
+			logger.Error("failed to set DPoP nonce cookie", "error", err)
+		}
+	}
+	
+	// Store auth server issuer for token exchange
+	if parResp.AuthServerIssuer != "" {
+		if err := auth.SetAuthServerIssuerCookie(w, parResp.AuthServerIssuer, cfg.AppEnv == "development"); err != nil {
+			logger.Error("failed to set auth server issuer cookie", "error", err)
+		}
+	}
+	
+	// Redirect using PAR request_uri instead of direct parameters
+	authURL := fmt.Sprintf("%s?client_id=%s&request_uri=%s", 
+		metadata.AuthorizationEndpoint,
+		url.QueryEscape(cfg.OAuthClientID), 
+		url.QueryEscape(parResp.RequestURI))
+	
+	logger.Info("Redirecting to authorization server with PAR", "authURL", authURL, "requestURI", parResp.RequestURI)
+	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
 // CallbackHandler handles /auth/callback requests
@@ -233,11 +273,7 @@ func (rt *Router) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	metadata, err := auth.DiscoverAuthorizationServer(handle)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to rediscover authorization server", "handle", handle, "error", err)
-		return
-	}
+	// Note: Authorization server discovery is now handled by the OAuth provider
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		logger.Error("No authorization code received", "handle", handle, "allParams", r.URL.Query())
@@ -256,21 +292,33 @@ func (rt *Router) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Missing PKCE verifier", "handle", handle)
 		return
 	}
-	// Retrieve DPoP private key from secure cookie
-	dpopKey, err := auth.GetDPoPKeyFromCookie(r)
+	// Note: DPoP key management is now handled by the OAuth provider
+	cfg := rt.Config
+	
+	// Create OAuth service with configured provider
+	oauthService, err := oauth.NewService(cfg)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Missing DPoP key", "handle", handle)
+		logger.Error("Failed to create OAuth service", "handle", handle, "error", err)
+		writeError(w, http.StatusInternalServerError, "OAuth service initialization failed", "handle", handle, "error", err)
 		return
 	}
-	cfg := rt.Config
-	logger.Info("Starting token exchange with DPoP", "handle", handle, "code", code[:10]+"...", "tokenEndpoint", metadata.TokenEndpoint)
-	token, err := auth.ExchangeCodeForTokenWithDPoP(ctx, metadata, code, verCookie.Value, dpopKey, cfg)
+	
+	logger.Info("Starting token exchange", "handle", handle, "code", code[:10]+"...", "provider", oauthService.GetProviderName())
+	// Inject HTTP request into context for provider access to cookies/session
+	ctxWithRequest := context.WithValue(ctx, "http_request", r)
+	tokenResult, err := oauthService.ExchangeToken(ctxWithRequest, code, verCookie.Value)
 	if err != nil {
-		logger.Error("Token exchange failed", "handle", handle, "error", err, "tokenEndpoint", metadata.TokenEndpoint)
+		logger.Error("Token exchange failed", "handle", handle, "error", err, "provider", oauthService.GetProviderName())
 		writeError(w, http.StatusUnauthorized, "Token exchange failed", "handle", handle, "error", err)
 		return
 	}
-	logger.Info("Token exchange successful", "handle", handle)
+	logger.Info("Token exchange successful", "handle", handle, "provider", oauthService.GetProviderName())
+	
+	// Convert TokenResult back to oauth2.Token for compatibility with existing code
+	token := &oauth2.Token{
+		AccessToken:  tokenResult.AccessToken,
+		RefreshToken: tokenResult.RefreshToken,
+	}
 	refreshToken := ""
 	if token.RefreshToken != "" {
 		refreshToken = token.RefreshToken

@@ -184,6 +184,8 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 		result = r.testStandardPost(req, testDID)
 	case "test_session_auth":
 		result = r.testSessionAuth(req, testDID)
+	case "check_server_scopes":
+		result = r.checkServerScopes(testDID)
 	default:
 		result = TestResult{
 			Operation: operation,
@@ -198,22 +200,27 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 	// Return result using Datastar
 	sse := datastar.NewSSE(w, req)
 	
-	// Build the result HTML fragment 
-	htmlFragment := fmt.Sprintf(`<div id="test-results">
+	// Build the result HTML fragment with better UX
+	copyButtonId := fmt.Sprintf("copy-btn-%d", time.Now().UnixNano())
+	detailsId := fmt.Sprintf("details-%d", time.Now().UnixNano())
+	
+	htmlFragment := fmt.Sprintf(`<div id="test-results" style="position: sticky; top: 20px; z-index: 100; background: var(--pico-background-color); border: 1px solid var(--pico-border-color); border-radius: 5px; padding: 1rem; margin: 1rem 0;">
 		<div class="test-result result-%s">
 			<h4>%s</h4>
 			<p>%s</p>
-			<details>
-				<summary>Details</summary>
-				<pre class="result-details">%s</pre>
-			</details>
-			<small>Latest test result</small>
+			<div style="margin: 0.5rem 0;">
+				<button id="%s" onclick="navigator.clipboard.writeText(document.getElementById('%s').innerText); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy Details', 2000)" style="font-size: 0.8rem; padding: 0.25rem 0.5rem;">Copy Details</button>
+			</div>
+			<div id="%s" style="background: var(--pico-code-background-color); padding: 1rem; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; font-size: 0.9rem;">%s</div>
+			<small>Latest test result - stays visible while scrolling</small>
 		</div>
-		<p><em>Run tests to see results here...</em></p>
 	</div>`, 
 		func() string { if result.Success { return "success" }; return "error" }(),
 		strings.ToUpper(strings.ReplaceAll(result.Operation, "_", " ")),
 		result.Message,
+		copyButtonId,
+		detailsId,
+		detailsId,
 		result.Details,
 	)
 	
@@ -755,11 +762,35 @@ func (r *Router) testStandardPost(req *http.Request, userDID string) TestResult 
 	
 	resp, err := xrpcClient.CreateRecordWithDPoP(ctx, createReq, accessToken, dpopKey)
 	if err != nil {
+		// Log the full error for debugging
+		logger.Error("Standard post creation failed with detailed error", "error", err, "userDID", userDID, "postText", postText)
+		
+		// Enhanced error details with request information
+		errorDetails := fmt.Sprintf(`Post Creation Failure Details:
+Post Text: %s
+User DID: %s
+Collection: %s
+RKey: %s
+Has Access Token: %t
+Has DPoP Key: %t
+
+Full Error: %v
+
+Request Details:
+- Endpoint: https://bsky.social/xrpc/com.atproto.repo.createRecord
+- Method: POST
+- Headers: Authorization Bearer + DPoP
+- Record Type: app.bsky.feed.post
+
+This error contains the exact response from Bluesky's API explaining why the request failed.`, 
+			postText, userDID, createReq.Collection, createReq.RKey, 
+			accessToken != "", dpopKey != nil, err)
+		
 		return TestResult{
 			Operation: "test_standard_post",
 			Success:   false,
-			Message:   "Standard post creation failed",
-			Details:   fmt.Sprintf("Post: %s\n\nError: %v\n\nThis tests our DPoP implementation with a standard Bluesky lexicon.", postText, err),
+			Message:   "Standard post creation failed - see details for API response",
+			Details:   errorDetails,
 		}
 	}
 	
@@ -778,5 +809,50 @@ func (r *Router) testSessionAuth(req *http.Request, userDID string) TestResult {
 		Success:   false,
 		Message:   "Session-based auth not implemented yet",
 		Details:   "This would test the WhiteWind approach:\n1. Use com.atproto.server.createSession instead of OAuth\n2. Bypass DPoP headers\n3. Use session tokens directly\n\nThis could bypass OAuth scope restrictions that are blocking custom lexicons.",
+	}
+}
+
+// checkServerScopes checks what scopes the authorization server supports
+func (r *Router) checkServerScopes(userDID string) TestResult {
+	// Discover the authorization server metadata
+	metadata, err := auth.DiscoverAuthorizationServer("ryeyam.bsky.social")
+	if err != nil {
+		return TestResult{
+			Operation: "check_server_scopes",
+			Success:   false,
+			Message:   "Failed to discover authorization server",
+			Details:   fmt.Sprintf("Error: %v", err),
+		}
+	}
+
+	supportedScopes := "None listed"
+	if len(metadata.ScopesSupported) > 0 {
+		supportedScopes = strings.Join(metadata.ScopesSupported, ", ")
+	}
+
+	details := fmt.Sprintf(`Authorization Server Metadata:
+Issuer: %s
+Authorization Endpoint: %s
+Token Endpoint: %s
+PAR Endpoint: %s
+
+Supported Scopes: %s
+DPoP Signing Algorithms: %s
+
+Current token scope: atproto transition:generic
+
+This shows what scopes the server actually supports vs what we're requesting.`, 
+		metadata.Issuer,
+		metadata.AuthorizationEndpoint, 
+		metadata.TokenEndpoint,
+		metadata.PushedAuthorizationRequestEndpoint,
+		supportedScopes,
+		strings.Join(metadata.DPoPSigningAlgValuesSupported, ", "))
+
+	return TestResult{
+		Operation: "check_server_scopes",
+		Success:   true,
+		Message:   "Authorization server metadata retrieved",
+		Details:   details,
 	}
 }

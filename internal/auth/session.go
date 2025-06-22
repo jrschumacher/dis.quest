@@ -110,6 +110,8 @@ func (k *DPoPKeyPair) DPoPPublicJWK() map[string]interface{} {
 }
 
 const dpopKeyCookieName = "dpop_key"
+const dpopNonceCookieName = "dpop_nonce"
+const authServerIssuerCookieName = "auth_server_issuer"
 
 // SetDPoPKeyCookie stores the DPoP private key in a secure, HttpOnly cookie
 func SetDPoPKeyCookie(w http.ResponseWriter, key *ecdsa.PrivateKey, isDev bool) error {
@@ -153,6 +155,68 @@ func ClearDPoPKeyCookie(w http.ResponseWriter, isDev bool) {
 	})
 }
 
+// SetDPoPNonceCookie stores the DPoP nonce in a secure, HttpOnly cookie
+func SetDPoPNonceCookie(w http.ResponseWriter, nonce string, isDev bool) error {
+	secure := !isDev
+	http.SetCookie(w, &http.Cookie{
+		Name:     dpopNonceCookieName,
+		Value:    nonce,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   600, // 10 minutes for OAuth flow
+	})
+	return nil
+}
+
+// GetDPoPNonceFromCookie retrieves the DPoP nonce from the cookie
+func GetDPoPNonceFromCookie(r *http.Request) (string, error) {
+	cookie, err := r.Cookie(dpopNonceCookieName)
+	if err != nil {
+		return "", err
+	}
+	return cookie.Value, nil
+}
+
+// ClearDPoPNonceCookie clears the DPoP nonce cookie
+func ClearDPoPNonceCookie(w http.ResponseWriter, isDev bool) {
+	secure := !isDev
+	http.SetCookie(w, &http.Cookie{
+		Name:     dpopNonceCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// SetAuthServerIssuerCookie stores the auth server issuer in a secure, HttpOnly cookie
+func SetAuthServerIssuerCookie(w http.ResponseWriter, issuer string, isDev bool) error {
+	secure := !isDev
+	http.SetCookie(w, &http.Cookie{
+		Name:     authServerIssuerCookieName,
+		Value:    issuer,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   600, // 10 minutes for OAuth flow
+	})
+	return nil
+}
+
+// GetAuthServerIssuerFromCookie retrieves the auth server issuer from the cookie
+func GetAuthServerIssuerFromCookie(r *http.Request) (string, error) {
+	cookie, err := r.Cookie(authServerIssuerCookieName)
+	if err != nil {
+		return "", err
+	}
+	return cookie.Value, nil
+}
+
 // DPoPJWTHeader represents the header of a DPoP JWT
 type DPoPJWTHeader struct {
 	Typ string                 `json:"typ"`
@@ -167,6 +231,7 @@ type DPoPJWTPayload struct {
 	HTU   string `json:"htu"`
 	IAT   int64  `json:"iat"`
 	Nonce string `json:"nonce,omitempty"`
+	Ath   string `json:"ath,omitempty"` // Access token hash (base64url(SHA256(access_token)))
 }
 
 // CreateDPoPJWT creates a DPoP JWT for the given HTTP method and URL
@@ -176,6 +241,11 @@ func CreateDPoPJWT(key *ecdsa.PrivateKey, method, targetURL string) (string, err
 
 // CreateDPoPJWTWithNonce creates a DPoP JWT for the given HTTP method and URL with optional nonce
 func CreateDPoPJWTWithNonce(key *ecdsa.PrivateKey, method, targetURL, nonce string) (string, error) {
+	return CreateDPoPJWTWithAccessToken(key, method, targetURL, nonce, "")
+}
+
+// CreateDPoPJWTWithAccessToken creates a DPoP JWT with access token hash (ath claim)
+func CreateDPoPJWTWithAccessToken(key *ecdsa.PrivateKey, method, targetURL, nonce, accessToken string) (string, error) {
 	// Parse the URL to get the scheme, host, and path (no query or fragment)
 	u, err := url.Parse(targetURL)
 	if err != nil {
@@ -202,6 +272,13 @@ func CreateDPoPJWTWithNonce(key *ecdsa.PrivateKey, method, targetURL, nonce stri
 	}
 	jti := base64.RawURLEncoding.EncodeToString(jtiBytes)
 	
+	// Calculate access token hash if provided
+	var ath string
+	if accessToken != "" {
+		hash := sha256.Sum256([]byte(accessToken))
+		ath = base64.RawURLEncoding.EncodeToString(hash[:])
+	}
+
 	// Create payload
 	payload := DPoPJWTPayload{
 		JTI:   jti,
@@ -209,6 +286,7 @@ func CreateDPoPJWTWithNonce(key *ecdsa.PrivateKey, method, targetURL, nonce stri
 		HTU:   htu,
 		IAT:   time.Now().Unix(),
 		Nonce: nonce,
+		Ath:   ath,
 	}
 	
 	// Encode header and payload
@@ -279,4 +357,28 @@ func CalculateJWKThumbprint(jwk map[string]interface{}) (string, error) {
 func (k *DPoPKeyPair) GetJWKThumbprint() (string, error) {
 	jwk := k.DPoPPublicJWK()
 	return CalculateJWKThumbprint(jwk)
+}
+
+// GetDPoPKeyFromRequest retrieves the DPoP private key from the request context or cookies
+func GetDPoPKeyFromRequest(r *http.Request) (string, error) {
+	// Get DPoP key from cookie (PEM encoded)
+	dpopKey, err := GetDPoPKeyFromCookie(r)
+	if err != nil {
+		return "", fmt.Errorf("failed to get DPoP key from cookie: %w", err)
+	}
+	
+	// Convert to JWK JSON format for tangled library
+	keyPair := &DPoPKeyPair{PrivateKey: dpopKey}
+	jwk := keyPair.DPoPPublicJWK()
+	
+	// Add private key component
+	jwk["d"] = base64.RawURLEncoding.EncodeToString(dpopKey.D.Bytes())
+	
+	// Marshal to JSON
+	jwkBytes, err := json.Marshal(jwk)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal DPoP key to JWK: %w", err)
+	}
+	
+	return string(jwkBytes), nil
 }

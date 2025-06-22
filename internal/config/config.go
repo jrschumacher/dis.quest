@@ -34,6 +34,7 @@ type Config struct {
 	AppName          string `mapstructure:"app_name" validate:"required"`
 	OAuthClientID    string `mapstructure:"oauth_client_id" validate:"required"`
 	OAuthRedirectURL string `mapstructure:"oauth_redirect_url" validate:"required"`
+	OAuthProvider    string `mapstructure:"oauth_provider" default:"manual" validate:"oneof=manual tangled"`
 
 	// Logging
 	LogLevel string `default:"INFO" validate:"oneof=DEBUG INFO WARN ERROR"`

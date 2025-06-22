@@ -177,6 +177,14 @@ templ DevPDSPage(data DevPDSPageData) {
 							Test Session Auth (WhiteWind Style)
 						</button>
 						<p><small>Tests session-based auth approach that bypasses OAuth scope restrictions</small></p>
+						
+						<button 
+							data-on-click="$operation = 'check_server_scopes'; @post('/dev/pds/test')"
+							class="button"
+						>
+							Check Server Scopes
+						</button>
+						<p><small>Shows what OAuth scopes the authorization server supports</small></p>
 					</div>
 				</details>
 

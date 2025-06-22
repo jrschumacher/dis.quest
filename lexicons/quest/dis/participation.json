@@ -1,0 +1,38 @@
+{
+  "lexicon": 1,
+  "id": "quest.dis.participation",
+  "needsCbor": true,
+  "needsType": true,
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": [
+          "topic",
+          "participant",
+          "joinedAt"
+        ],
+        "properties": {
+          "topic": {
+            "type": "string",
+            "format": "at-uri"
+          },
+          "participant": {
+            "type": "string",
+            "format": "did"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["creator", "participant", "moderator"]
+          },
+          "joinedAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

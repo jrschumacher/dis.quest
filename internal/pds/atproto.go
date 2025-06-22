@@ -62,7 +62,7 @@ func (s *ATProtoService) CreateTopicWithDPoP(userDID string, params CreateTopicP
 		Repo:       userDID,
 		Collection: TopicLexicon,
 		RKey:       rkey,
-		Validate:   true,
+		Validate:   false, // Custom lexicons require validate: false
 		Record:     recordData,
 	}
 

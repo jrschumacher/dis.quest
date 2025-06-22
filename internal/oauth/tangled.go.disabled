@@ -1,0 +1,216 @@
+package oauth
+
+import (
+	"context"
+	"crypto/ecdsa"
+	"fmt"
+
+	oauth "tangled.sh/icyphox.sh/atproto-oauth"
+	"tangled.sh/icyphox.sh/atproto-oauth/helpers"
+)
+
+// TangledProvider implements Provider using the tangled-sh OAuth library
+type TangledProvider struct {
+	config      *Config
+	oauthClient *oauth.Client
+}
+
+// NewTangledProvider creates a new TangledProvider
+func NewTangledProvider(config *Config) (*TangledProvider, error) {
+	// Parse the JWK from the config
+	privateJwk, err := helpers.ParseJWKFromBytes([]byte(config.JWKSPrivateKey))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse private JWK: %w", err)
+	}
+
+	// Create the OAuth client using tangled-sh library
+	client, err := oauth.NewClient(oauth.ClientArgs{
+		ClientId:    config.ClientID,
+		ClientJwk:   privateJwk,
+		RedirectUri: config.RedirectURI,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OAuth client: %w", err)
+	}
+
+	return &TangledProvider{
+		config:      config,
+		oauthClient: client,
+	}, nil
+}
+
+// GetProviderName returns the name of this provider
+func (t *TangledProvider) GetProviderName() string {
+	return "tangled"
+}
+
+// GetAuthURL generates the OAuth authorization URL with PKCE
+func (t *TangledProvider) GetAuthURL(state, codeChallenge string) string {
+	// Use the tangled-sh library to generate the auth URL
+	authRequest := oauth.AuthorizeRequest{
+		ResponseType:         "code",
+		ClientId:             t.config.ClientID,
+		RedirectUri:          t.config.RedirectURI,
+		Scope:                t.config.Scope,
+		State:                state,
+		CodeChallenge:        codeChallenge,
+		CodeChallengeMethod:  "S256",
+	}
+
+	// Create authorization URL through PDS discovery
+	authURL, err := t.oauthClient.CreateAuthUrl(context.Background(), t.config.PDSEndpoint, authRequest)
+	if err != nil {
+		// Return empty string on error - caller should handle
+		return ""
+	}
+
+	return authURL
+}
+
+// ExchangeToken exchanges authorization code for access token with DPoP binding
+func (t *TangledProvider) ExchangeToken(ctx context.Context, code, codeVerifier string) (*TokenResult, error) {
+	// Use the tangled-sh library to exchange the code for tokens
+	tokenRequest := oauth.TokenRequest{
+		GrantType:    "authorization_code",
+		Code:         code,
+		RedirectUri:  t.config.RedirectURI,
+		CodeVerifier: codeVerifier,
+		ClientId:     t.config.ClientID,
+	}
+
+	tokenResponse, dpopKey, err := t.oauthClient.ExchangeCodeForToken(ctx, t.config.PDSEndpoint, tokenRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to exchange code for token: %w", err)
+	}
+
+	// Convert tangled library response to our standard format
+	return &TokenResult{
+		AccessToken:  tokenResponse.AccessToken,
+		RefreshToken: tokenResponse.RefreshToken,
+		DPoPKey:      dpopKey,
+		UserDID:      tokenResponse.Sub, // Subject should be the user DID
+		ExpiresIn:    int64(tokenResponse.ExpiresIn),
+	}, nil
+}
+
+// CreateAuthorizedClient creates an XRPC client with the given token
+func (t *TangledProvider) CreateAuthorizedClient(token *TokenResult) (XRPCClient, error) {
+	// Create an authorized XRPC client using the tangled-sh library
+	xrpcClient, err := t.oauthClient.AuthorizedXrpcClient(
+		token.AccessToken,
+		token.DPoPKey,
+		t.config.PDSEndpoint,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create authorized XRPC client: %w", err)
+	}
+
+	return &tangledXRPCClient{
+		client:      xrpcClient,
+		accessToken: token.AccessToken,
+		dpopKey:     token.DPoPKey,
+		pdsEndpoint: t.config.PDSEndpoint,
+	}, nil
+}
+
+// RefreshToken refreshes an expired access token
+func (t *TangledProvider) RefreshToken(ctx context.Context, refreshToken string) (*TokenResult, error) {
+	// Use the tangled-sh library to refresh the token
+	refreshRequest := oauth.RefreshRequest{
+		GrantType:    "refresh_token",
+		RefreshToken: refreshToken,
+		ClientId:     t.config.ClientID,
+	}
+
+	tokenResponse, dpopKey, err := t.oauthClient.RefreshToken(ctx, t.config.PDSEndpoint, refreshRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to refresh token: %w", err)
+	}
+
+	// Convert tangled library response to our standard format
+	return &TokenResult{
+		AccessToken:  tokenResponse.AccessToken,
+		RefreshToken: tokenResponse.RefreshToken,
+		DPoPKey:      dpopKey,
+		UserDID:      tokenResponse.Sub, // Subject should be the user DID
+		ExpiresIn:    int64(tokenResponse.ExpiresIn),
+	}, nil
+}
+
+// tangledXRPCClient wraps the tangled-sh XRPC client to implement our interface
+type tangledXRPCClient struct {
+	client      oauth.XrpcClient // The actual tangled-sh XRPC client
+	accessToken string
+	dpopKey     *ecdsa.PrivateKey
+	pdsEndpoint string
+}
+
+func (c *tangledXRPCClient) CreateRecord(ctx context.Context, repo, collection, rkey string, record any) error {
+	// Use the tangled-sh XRPC client to create a record
+	err := c.client.CreateRecord(ctx, oauth.XrpcAuthedRequestArgs{
+		AccessToken: c.accessToken,
+		DpopKey:     c.dpopKey,
+		PdsUrl:      c.pdsEndpoint,
+	}, oauth.CreateRecordInput{
+		Repo:       repo,
+		Collection: collection,
+		Rkey:       rkey,
+		Record:     record,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create record: %w", err)
+	}
+	return nil
+}
+
+func (c *tangledXRPCClient) GetRecord(ctx context.Context, repo, collection, rkey string, result any) error {
+	// Use the tangled-sh XRPC client to get a record
+	err := c.client.GetRecord(ctx, oauth.XrpcAuthedRequestArgs{
+		AccessToken: c.accessToken,
+		DpopKey:     c.dpopKey,
+		PdsUrl:      c.pdsEndpoint,
+	}, oauth.GetRecordInput{
+		Repo:       repo,
+		Collection: collection,
+		Rkey:       rkey,
+	}, result)
+	if err != nil {
+		return fmt.Errorf("failed to get record: %w", err)
+	}
+	return nil
+}
+
+func (c *tangledXRPCClient) PutRecord(ctx context.Context, repo, collection, rkey string, record any) error {
+	// Use the tangled-sh XRPC client to put a record
+	err := c.client.PutRecord(ctx, oauth.XrpcAuthedRequestArgs{
+		AccessToken: c.accessToken,
+		DpopKey:     c.dpopKey,
+		PdsUrl:      c.pdsEndpoint,
+	}, oauth.PutRecordInput{
+		Repo:       repo,
+		Collection: collection,
+		Rkey:       rkey,
+		Record:     record,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to put record: %w", err)
+	}
+	return nil
+}
+
+func (c *tangledXRPCClient) DeleteRecord(ctx context.Context, repo, collection, rkey string) error {
+	// Use the tangled-sh XRPC client to delete a record
+	err := c.client.DeleteRecord(ctx, oauth.XrpcAuthedRequestArgs{
+		AccessToken: c.accessToken,
+		DpopKey:     c.dpopKey,
+		PdsUrl:      c.pdsEndpoint,
+	}, oauth.DeleteRecordInput{
+		Repo:       repo,
+		Collection: collection,
+		Rkey:       rkey,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete record: %w", err)
+	}
+	return nil
+}

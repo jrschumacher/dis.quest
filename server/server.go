@@ -8,6 +8,7 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/config"
 	"github.com/jrschumacher/dis.quest/internal/db"
 	"github.com/jrschumacher/dis.quest/internal/logger"
+	"github.com/jrschumacher/dis.quest/internal/oauth"
 	"github.com/jrschumacher/dis.quest/internal/pds"
 	apphandlers "github.com/jrschumacher/dis.quest/server/app"
 	authhandlers "github.com/jrschumacher/dis.quest/server/auth-handlers"
@@ -47,6 +48,13 @@ func Start(cfg *config.Config) {
 		}
 	}()
 
+	// Initialize OAuth service with configured provider
+	oauthService, err := oauth.NewService(cfg)
+	if err != nil {
+		logger.Error("failed to initialize OAuth service", "error", err)
+		panic("failed to initialize OAuth service")
+	}
+
 	// Initialize PDS service (real ATProtocol implementation)
 	pdsService := pds.NewATProtoService()
 
@@ -66,7 +74,7 @@ func Start(cfg *config.Config) {
 	})
 
 	wellknownhandlers.RegisterRoutes(mux, "/.well-known", cfg)
-	authhandlers.RegisterRoutes(mux, "/auth", cfg)
+	authhandlers.RegisterRoutes(mux, "/auth", cfg, oauthService)
 	healthhandlers.RegisterRoutes(mux, "/health", cfg)
 	apphandlers.RegisterRoutes(mux, "/", cfg, dbService, pdsService)
 

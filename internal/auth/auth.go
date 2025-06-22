@@ -59,6 +59,8 @@ type DPoPPKCETransport struct {
 	CodeVerifier string
 	DPoPKey      *ecdsa.PrivateKey
 	TargetURL    string
+	Config       *config.Config
+	Metadata     *AuthorizationServerMetadata
 }
 
 // RoundTrip implements http.RoundTripper for DPoP + PKCE with nonce retry
@@ -91,13 +93,22 @@ func (t *DPoPPKCETransport) RoundTrip(req *http.Request) (*http.Response, error)
 		// Add DPoP header
 		newReq.Header.Set("DPoP", dpopJWT)
 		
-		// Restore and modify body for PKCE
+		// Restore and modify body for PKCE and client_assertion
 		if bodyBytes != nil {
 			// Parse form values
 			values, err := url.ParseQuery(string(bodyBytes))
 			if err == nil && values.Get("grant_type") == "authorization_code" {
-				// Add code_verifier
+				// Add code_verifier for PKCE
 				values.Set("code_verifier", t.CodeVerifier)
+				
+				// Add client_assertion for private_key_jwt authentication
+				parClient := NewPARClient()
+				clientAssertion, err := parClient.CreateClientAssertion(t.Config.OAuthClientID, t.Metadata.Issuer, t.Config)
+				if err == nil {
+					values.Set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
+					values.Set("client_assertion", clientAssertion)
+				}
+				
 				newBody := values.Encode()
 				newReq.Body = io.NopCloser(strings.NewReader(newBody))
 				newReq.ContentLength = int64(len(newBody))
@@ -172,8 +183,8 @@ func OAuth2Config(metadata *AuthorizationServerMetadata, cfg *config.Config) *oa
 		ClientID:     cfg.OAuthClientID,
 		ClientSecret: "", // Not required for public clients
 		RedirectURL:  cfg.OAuthRedirectURL,
-		// CRITICAL: Scope format must match Tangled.sh's working implementation
-		Scopes:       []string{"atproto transition:generic"},
+		// CRITICAL: Request scopes as separate items based on server metadata
+		Scopes:       []string{"atproto", "transition:generic", "transition:chat.bsky"},
 		Endpoint: oauth2.Endpoint{
 			AuthURL:  metadata.AuthorizationEndpoint,
 			TokenURL: metadata.TokenEndpoint,
@@ -292,6 +303,8 @@ func ExchangeCodeForTokenWithDPoP(ctx context.Context, metadata *AuthorizationSe
 			CodeVerifier: codeVerifier,
 			DPoPKey:      dpopKey,
 			TargetURL:    metadata.TokenEndpoint,
+			Config:       cfg,
+			Metadata:     metadata,
 		},
 	})
 	return conf.Exchange(ctx, code)
