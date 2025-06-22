@@ -475,3 +475,113 @@ func (c *XRPCClient) ListRecords(ctx context.Context, repo, collection string, l
 
 	return &response, nil
 }
+
+// ListRecordsWithDPoP lists records from a repository with DPoP authentication
+func (c *XRPCClient) ListRecordsWithDPoP(ctx context.Context, repo, collection string, limit int, cursor, rvKey, accessToken string, dpopKey interface{}) (*ListRecordsResponse, error) {
+	pdsEndpoint, err := c.ResolvePDS(repo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve PDS: %w", err)
+	}
+
+	params := url.Values{}
+	params.Set("repo", repo)
+	params.Set("collection", collection)
+	if limit > 0 {
+		params.Set("limit", fmt.Sprintf("%d", limit))
+	}
+	if cursor != "" {
+		params.Set("cursor", cursor)
+	}
+	if rvKey != "" {
+		params.Set("rkeyStart", rvKey)
+	}
+
+	reqURL := fmt.Sprintf("%s/xrpc/com.atproto.repo.listRecords?%s", pdsEndpoint, params.Encode())
+
+	// Create a function to make the request, which we'll call twice if nonce is required
+	makeRequest := func(nonce string) (*http.Response, error) {
+		httpReq, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		// Add Authorization header
+		httpReq.Header.Set("Authorization", "DPoP "+accessToken)
+
+		// Create and add DPoP header
+		ecdsaKey, ok := dpopKey.(*ecdsa.PrivateKey)
+		if !ok {
+			return nil, fmt.Errorf("invalid DPoP key type")
+		}
+		dpopHeader, err := auth.CreateDPoPJWTWithAccessToken(ecdsaKey, "GET", reqURL, nonce, accessToken)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create DPoP header: %w", err)
+		}
+		httpReq.Header.Set("DPoP", dpopHeader)
+
+		// Log request details
+		logger.Info("Making XRPC listRecords request", 
+			"method", httpReq.Method,
+			"url", httpReq.URL.String(),
+			"hasAuth", httpReq.Header.Get("Authorization") != "",
+			"hasDPoP", httpReq.Header.Get("DPoP") != "",
+			"nonce", nonce)
+
+		return c.client.Do(httpReq)
+	}
+
+	// First attempt without nonce
+	resp, err := makeRequest("")
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Error("failed to close response body", "error", err)
+		}
+	}()
+
+	// Check for DPoP nonce requirement
+	if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusUnauthorized {
+		// Read response to check for nonce requirement
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, fmt.Errorf("PDS request failed with status: %d (unable to read error details: %v)", resp.StatusCode, readErr)
+		}
+		
+		// Check if error indicates DPoP nonce is needed
+		var errorResp map[string]interface{}
+		if json.Unmarshal(body, &errorResp) == nil {
+			logger.Info("Checking for DPoP nonce error", "error", errorResp["error"], "message", errorResp["message"])
+			if errorResp["error"] == "use_dpop_nonce" || 
+			   strings.Contains(fmt.Sprintf("%v", errorResp["message"]), "nonce") {
+				// Get nonce from DPoP-Nonce header
+				if dpopNonce := resp.Header.Get("DPoP-Nonce"); dpopNonce != "" {
+					logger.Info("Retrying listRecords with DPoP nonce", "nonce", dpopNonce)
+					
+					// Close the first response and retry with nonce
+					resp.Body.Close()
+					retryResp, retryErr := makeRequest(dpopNonce)
+					if retryErr != nil {
+						return nil, fmt.Errorf("failed to retry request with nonce: %w", retryErr)
+					}
+					
+					// Use the retry response for the rest of the function
+					resp = retryResp
+				}
+			}
+		}
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("PDS request failed with status: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var response ListRecordsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &response, nil
+}

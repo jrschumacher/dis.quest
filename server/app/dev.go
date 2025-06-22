@@ -158,32 +158,12 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 	var result TestResult
 
 	switch operation {
-	case "validate_lexicons":
-		result = r.testLexiconValidation()
-	case "test_uri_parsing":
-		result = r.testURIParsing()
-	case "simulate_create_topic":
-		result = r.simulateCreateTopic(testDID)
-	case "simulate_get_topic":
-		uri := topicURI
-		if uri == "" {
-			uri = fmt.Sprintf("at://%s/quest.dis.topic/topic-123", testDID)
-		}
-		result = r.simulateGetTopic(uri)
-	case "test_real_pds_structure":
-		result = r.testRealPDSStructure(testDID)
-	case "browse_real_pds":
-		result = r.browseRealPDS(testDID)
 	case "list_pds_topics":
-		result = r.listPDSTopics(testDID)
+		result = r.listPDSTopics(req, testDID)
 	case "get_pds_record":
 		result = r.getPDSRecord(topicURI)
-	case "create_random_topic":
-		result = r.createRandomTopic(req, testDID)
-	case "test_standard_post":
-		result = r.testStandardPost(req, testDID)
-	case "test_session_auth":
-		result = r.testSessionAuth(req, testDID)
+	case "create_topic_modal":
+		result = r.createTopicFromModal(req, testDID)
 	case "check_server_scopes":
 		result = r.checkServerScopes(testDID)
 	default:
@@ -200,27 +180,219 @@ func (r *Router) DevPDSTestHandler(w http.ResponseWriter, req *http.Request) {
 	// Return result using Datastar
 	sse := datastar.NewSSE(w, req)
 	
-	// Build the result HTML fragment with better UX
-	copyButtonId := fmt.Sprintf("copy-btn-%d", time.Now().UnixNano())
-	detailsId := fmt.Sprintf("details-%d", time.Now().UnixNano())
+	// Special handling for list_pds_topics to update the table
+	if operation == "list_pds_topics" && result.Success {
+		// Parse the topics data and build table rows
+		var tableRows strings.Builder
+		
+		if strings.HasPrefix(result.Details, "TABLE_DATA:") {
+			// Parse the structured table data
+			tableDataStr := strings.TrimPrefix(result.Details, "TABLE_DATA:")
+			if tableDataStr != "" {
+				topicEntries := strings.Split(tableDataStr, "||")
+				for _, entry := range topicEntries {
+					if entry == "" {
+						continue
+					}
+					parts := strings.Split(entry, "|")
+					if len(parts) >= 5 {
+						title := parts[0]
+						summary := parts[1]
+						tags := parts[2]
+						created := parts[3]
+						uri := parts[4]
+						
+						// Truncate long text for table display
+						if len(summary) > 50 {
+							summary = summary[:47] + "..."
+						}
+						if len(title) > 30 {
+							title = title[:27] + "..."
+						}
+						
+						tableRows.WriteString(fmt.Sprintf(`
+							<tr class="hover:bg-gray-50">
+								<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">%s</td>
+								<td class="px-6 py-4 text-sm text-gray-700">%s</td>
+								<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">%s</td>
+								<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">%s</td>
+								<td class="px-6 py-4 text-xs text-gray-400 font-mono">%s</td>
+							</tr>`, title, summary, tags, created, uri))
+					}
+				}
+			}
+		}
+		
+		// If no topics, show empty state
+		if tableRows.Len() == 0 {
+			tableRows.WriteString(`
+				<tr>
+					<td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">
+						No topics found. Create your first topic to get started!
+					</td>
+				</tr>`)
+		}
+		
+		logger.Info("Sending table update fragment", "rowCount", strings.Count(tableRows.String(), "<tr"))
+		
+		
+		// Build complete tbody content including loading and empty states
+		var completeTableBody strings.Builder
+		completeTableBody.WriteString(`<tbody id="topics-table-body" class="bg-white divide-y divide-gray-200" data-merge="morph">`)
+		
+		// Loading state row
+		completeTableBody.WriteString(`
+			<tr data-show="$loadingTopics">
+				<td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">
+					<div class="flex items-center justify-center">
+						<svg class="animate-spin h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24">
+							<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"></circle>
+							<path fill="currentColor" class="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+						</svg>
+						Loading topics...
+					</div>
+				</td>
+			</tr>`)
+		
+		// Add topic rows if we have data
+		if tableRows.Len() > 0 {
+			completeTableBody.WriteString(tableRows.String())
+		} else {
+			// Empty state row (only show when not loading)
+			completeTableBody.WriteString(`
+				<tr data-show="!$loadingTopics">
+					<td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">
+						No topics found. Create your first topic to get started!
+					</td>
+				</tr>`)
+		}
+		
+		completeTableBody.WriteString(`</tbody>`)
+		
+		// First update loading signal and row count
+		signalsJSON, _ := json.Marshal(map[string]any{
+			"loadingTopics": false,
+			"rows": 0, // Will be updated after we count the topics
+		})
+		if err := sse.MergeSignals(signalsJSON); err != nil {
+			logger.Error("Failed to update loading signal", "error", err)
+		}
+		
+		// Build topics array for template rendering
+		var topics []components.TopicDisplay
+		if strings.HasPrefix(result.Details, "TABLE_DATA:") {
+			tableDataStr := strings.TrimPrefix(result.Details, "TABLE_DATA:")
+			if tableDataStr != "" {
+				topicEntries := strings.Split(tableDataStr, "||")
+				for _, entry := range topicEntries {
+					if entry == "" {
+						continue
+					}
+					parts := strings.Split(entry, "|")
+					if len(parts) >= 5 {
+						topics = append(topics, components.TopicDisplay{
+							Title:   parts[0],
+							Summary: parts[1],
+							Tags:    parts[2],
+							Created: parts[3],
+							URI:     parts[4],
+						})
+					}
+				}
+			}
+		}
+		
+		// Update row count signal
+		rowCountJSON, _ := json.Marshal(map[string]any{"rows": len(topics)})
+		if err := sse.MergeSignals(rowCountJSON); err != nil {
+			logger.Error("Failed to update row count", "error", err)
+		}
+		
+		// First clear existing rows, then add new ones
+		clearFragment := `<tbody id="topics-table-body" class="bg-white divide-y divide-gray-200">
+			<tr data-show="$loadingTopics">
+				<td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">
+					<div class="flex items-center justify-center">
+						<svg class="animate-spin h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24">
+							<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"></circle>
+							<path fill="currentColor" class="opacity-75" d="M4 12a8 8 0 818-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+						</svg>
+						Loading topics...
+					</div>
+				</td>
+			</tr>
+			<tr data-show="!$loadingTopics && $rows == 0">
+				<td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">
+					No topics found. Create your first topic to get started!
+				</td>
+			</tr>
+		</tbody>`
+		
+		if err := sse.MergeFragments(clearFragment); err != nil {
+			logger.Error("Failed to clear table body", "error", err)
+		}
+		
+		// Then render topic rows
+		if len(topics) > 0 {
+			if err := sse.MergeFragmentTempl(
+				components.TopicRows(topics),
+				datastar.WithSelectorID("topics-table-body"),
+				datastar.WithMergeAppend(),
+			); err != nil {
+				logger.Error("Failed to render topic rows", "error", err)
+			} else {
+				logger.Info("Topic rows rendered successfully", "topicCount", len(topics))
+			}
+		} else {
+			logger.Info("No topics to display")
+		}
+		return
+	}
 	
-	htmlFragment := fmt.Sprintf(`<div id="test-results" style="position: sticky; top: 20px; z-index: 100; background: var(--pico-background-color); border: 1px solid var(--pico-border-color); border-radius: 5px; padding: 1rem; margin: 1rem 0;">
-		<div class="test-result result-%s">
-			<h4>%s</h4>
-			<p>%s</p>
-			<div style="margin: 0.5rem 0;">
-				<button id="%s" onclick="navigator.clipboard.writeText(document.getElementById('%s').innerText); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy Details', 2000)" style="font-size: 0.8rem; padding: 0.25rem 0.5rem;">Copy Details</button>
+	// Standard test result display for other operations
+	copyButtonID := fmt.Sprintf("copy-btn-%d", time.Now().UnixNano())
+	detailsID := fmt.Sprintf("details-%d", time.Now().UnixNano())
+	
+	// Determine the color scheme based on success
+	colorClasses := "border-red-200 bg-red-50"
+	iconColor := "text-red-500"
+	if result.Success {
+		colorClasses = "border-green-200 bg-green-50"
+		iconColor = "text-green-500"
+	}
+	
+	htmlFragment := fmt.Sprintf(`<div id="test-results" class="p-4 %s border rounded-lg">
+		<div class="flex items-start space-x-3">
+			<div class="flex-shrink-0">
+				<svg class="h-5 w-5 %s" fill="currentColor" viewBox="0 0 20 20">
+					%s
+				</svg>
 			</div>
-			<div id="%s" style="background: var(--pico-code-background-color); padding: 1rem; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; font-size: 0.9rem;">%s</div>
-			<small>Latest test result - stays visible while scrolling</small>
+			<div class="flex-1">
+				<h4 class="text-sm font-medium text-gray-900">%s</h4>
+				<p class="mt-1 text-sm text-gray-700">%s</p>
+				<div class="mt-3">
+					<button id="%s" onclick="navigator.clipboard.writeText(document.getElementById('%s').innerText); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy Details', 2000)" class="inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50">
+						Copy Details
+					</button>
+				</div>
+				<div id="%s" class="mt-3 p-3 bg-gray-100 rounded-md font-mono text-xs whitespace-pre-wrap max-h-96 overflow-y-auto">%s</div>
+			</div>
 		</div>
 	</div>`, 
-		func() string { if result.Success { return "success" }; return "error" }(),
+		colorClasses,
+		iconColor,
+		func() string { 
+			if result.Success { 
+				return `<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>`
+			}
+			return `<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>`
+		}(),
 		strings.ToUpper(strings.ReplaceAll(result.Operation, "_", " ")),
 		result.Message,
-		copyButtonId,
-		detailsId,
-		detailsId,
+		copyButtonID,
+		detailsID,
+		detailsID,
 		result.Details,
 	)
 	
@@ -468,16 +640,134 @@ func (r *Router) browseRealPDS(userDID string) TestResult {
 }
 
 // listPDSTopics lists topics from the user's PDS using authenticated session
-func (r *Router) listPDSTopics(_ string) TestResult {
-	// This would use the user's actual access token from their session
-	// For now, we'll show what the structure would look like
-	
-	return TestResult{
-		Operation: "list_pds_topics",
-		Success:   false,
-		Message:   "Access token integration needed",
-		Details:   "To query your real PDS, we need to:\n1. Extract access token from your session\n2. Add it to XRPC requests\n3. Handle DPoP headers for security\n\nThis would call: listRecords(repo: your-did, collection: quest.dis.topic)",
+func (r *Router) listPDSTopics(req *http.Request, userDID string) TestResult {
+	// Extract access token from session
+	accessToken, err := auth.GetSessionCookie(req)
+	if err != nil {
+		return TestResult{
+			Operation: "list_pds_topics",
+			Success:   false,
+			Message:   "No session found - please login first",
+			Details:   fmt.Sprintf("Error getting session cookie: %v", err),
+		}
 	}
+	
+	// Extract DPoP key from session
+	dpopKey, err := auth.GetDPoPKeyFromCookie(req)
+	if err != nil {
+		return TestResult{
+			Operation: "list_pds_topics",
+			Success:   false,
+			Message:   "No DPoP key found - please re-authenticate",
+			Details:   fmt.Sprintf("DPoP key required for ATProtocol OAuth. Error: %v", err),
+		}
+	}
+	
+	// Use the real XRPC client to list records
+	xrpcClient := pds.NewXRPCClient()
+	ctx := context.Background()
+	
+	// Try to list quest.dis.topic records
+	response, err := xrpcClient.ListRecordsWithDPoP(ctx, userDID, pds.TopicLexicon, 50, "", "", accessToken, dpopKey)
+	if err != nil {
+		return TestResult{
+			Operation: "list_pds_topics",
+			Success:   false,
+			Message:   "Failed to fetch topics from PDS",
+			Details:   fmt.Sprintf("Error: %v\n\nThis could be due to:\n- Missing DPoP headers\n- Insufficient OAuth scopes\n- PDS connectivity issues\n- No topics exist yet", err),
+		}
+	}
+	
+	if len(response.Records) == 0 {
+		return TestResult{
+			Operation: "list_pds_topics",
+			Success:   true,
+			Message:   "No topics found",
+			Details:   "You haven't created any quest.dis.topic records yet. Use the 'Create Topic' button to create your first topic!",
+		}
+	}
+	
+	// Store the actual topic data for table rendering
+	type TopicForTable struct {
+		Title     string
+		Summary   string
+		Tags      string
+		Created   string
+		URI       string
+	}
+	
+	var topics []TopicForTable
+	var topicsInfo []string
+	
+	for _, record := range response.Records {
+		// Parse the record to get topic details
+		topicData := record.Value
+		title := "Unknown"
+		if t, exists := topicData["title"].(string); exists {
+			title = t
+		}
+		
+		summary := "No summary"
+		if s, exists := topicData["summary"].(string); exists {
+			summary = s
+		}
+		
+		var tagList []string
+		if tagsInterface, exists := topicData["tags"].([]interface{}); exists {
+			for _, tag := range tagsInterface {
+				if tagStr, ok := tag.(string); ok {
+					tagList = append(tagList, tagStr)
+				}
+			}
+		}
+		tagsStr := strings.Join(tagList, ", ")
+		if tagsStr == "" {
+			tagsStr = "none"
+		}
+		
+		createdAt := "Unknown"
+		if c, exists := topicData["createdAt"].(string); exists {
+			if parsed, parseErr := time.Parse(time.RFC3339, c); parseErr == nil {
+				createdAt = parsed.Format("2006-01-02 15:04")
+			}
+		}
+		
+		// Store structured data for table
+		topics = append(topics, TopicForTable{
+			Title:   title,
+			Summary: summary,
+			Tags:    tagsStr,
+			Created: createdAt,
+			URI:     record.URI,
+		})
+		
+		// Also keep the formatted string for fallback display
+		topicInfo := fmt.Sprintf("Title: %s\nSummary: %s\nTags: %s\nCreated: %s\nURI: %s", 
+			title, summary, tagsStr, createdAt, record.URI)
+		topicsInfo = append(topicsInfo, topicInfo)
+	}
+	
+	// Include the structured data in a special field for the table handler
+	result := TestResult{
+		Operation: "list_pds_topics",
+		Success:   true,
+		Message:   fmt.Sprintf("Found %d topics", len(response.Records)),
+		Details:   fmt.Sprintf("Topics found:\n\n%s", strings.Join(topicsInfo, "\n\n---\n\n")),
+	}
+	
+	// Add structured topic data for table rendering (we'll access this via a type assertion)
+	if len(topics) > 0 {
+		// Store the topics in Details for now, but we'll parse them in the handler
+		var tableData []string
+		for _, topic := range topics {
+			tableData = append(tableData, fmt.Sprintf("%s|%s|%s|%s|%s", 
+				topic.Title, topic.Summary, topic.Tags, topic.Created, topic.URI))
+		}
+		// Replace Details with pipe-separated data for easy parsing
+		result.Details = "TABLE_DATA:" + strings.Join(tableData, "||")
+	}
+	
+	return result
 }
 
 // getPDSRecord retrieves a specific record from the user's PDS
@@ -812,8 +1102,113 @@ func (r *Router) testSessionAuth(req *http.Request, userDID string) TestResult {
 	}
 }
 
+// createTopicFromModal creates a topic using the modal form data
+func (r *Router) createTopicFromModal(req *http.Request, userDID string) TestResult {
+	// Parse request data
+	var newTopicTitle, newTopicSummary, newTopicTags string
+	
+	contentType := req.Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/json") {
+		var data map[string]interface{}
+		if err := json.NewDecoder(req.Body).Decode(&data); err != nil {
+			return TestResult{
+				Operation: "create_topic_modal",
+				Success:   false,
+				Message:   "Failed to parse request data",
+				Details:   err.Error(),
+			}
+		}
+		
+		if title, ok := data["newTopicTitle"].(string); ok {
+			newTopicTitle = title
+		}
+		if summary, ok := data["newTopicSummary"].(string); ok {
+			newTopicSummary = summary
+		}
+		if tags, ok := data["newTopicTags"].(string); ok {
+			newTopicTags = tags
+		}
+	}
+	
+	if newTopicTitle == "" || newTopicSummary == "" {
+		return TestResult{
+			Operation: "create_topic_modal",
+			Success:   false,
+			Message:   "Title and summary are required",
+			Details:   "Please fill in both title and summary fields",
+		}
+	}
+	
+	// Parse tags
+	var tagList []string
+	if newTopicTags != "" {
+		rawTags := strings.Split(newTopicTags, ",")
+		for _, tag := range rawTags {
+			tag = strings.TrimSpace(tag)
+			if tag != "" {
+				tagList = append(tagList, tag)
+			}
+		}
+	}
+	
+	// Extract access token and DPoP key
+	accessToken, err := auth.GetSessionCookie(req)
+	if err != nil {
+		return TestResult{
+			Operation: "create_topic_modal",
+			Success:   false,
+			Message:   "No session found - please login first",
+			Details:   fmt.Sprintf("Error getting session cookie: %v", err),
+		}
+	}
+	
+	dpopKey, err := auth.GetDPoPKeyFromCookie(req)
+	if err != nil {
+		return TestResult{
+			Operation: "create_topic_modal",
+			Success:   false,
+			Message:   "No DPoP key found - please re-authenticate",
+			Details:   fmt.Sprintf("DPoP key required for ATProtocol OAuth. Error: %v", err),
+		}
+	}
+	
+	// Create the topic
+	params := pds.CreateTopicParams{
+		Title:   newTopicTitle,
+		Summary: newTopicSummary,
+		Tags:    tagList,
+	}
+	
+	atprotoService, ok := r.pdsService.(*pds.ATProtoService)
+	if !ok {
+		return TestResult{
+			Operation: "create_topic_modal",
+			Success:   false,
+			Message:   "PDS service not available",
+			Details:   "ATProtocol service required for topic creation",
+		}
+	}
+	
+	topic, err := atprotoService.CreateTopicWithDPoP(userDID, params, accessToken, dpopKey)
+	if err != nil {
+		return TestResult{
+			Operation: "create_topic_modal",
+			Success:   false,
+			Message:   "Failed to create topic",
+			Details:   fmt.Sprintf("Title: %s\nSummary: %s\nTags: %v\n\nError: %v", newTopicTitle, newTopicSummary, tagList, err),
+		}
+	}
+	
+	return TestResult{
+		Operation: "create_topic_modal",
+		Success:   true,
+		Message:   "Topic created successfully!",
+		Details:   fmt.Sprintf("Created topic:\nURI: %s\nCID: %s\nTitle: %s\nSummary: %s\nTags: %v", topic.URI, topic.CID, topic.Title, topic.Summary, topic.Tags),
+	}
+}
+
 // checkServerScopes checks what scopes the authorization server supports
-func (r *Router) checkServerScopes(userDID string) TestResult {
+func (r *Router) checkServerScopes(_ string) TestResult {
 	// Discover the authorization server metadata
 	metadata, err := auth.DiscoverAuthorizationServer("ryeyam.bsky.social")
 	if err != nil {

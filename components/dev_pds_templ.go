@@ -18,7 +18,7 @@ func getInitialSignals(data DevPDSPageData) string {
 	if data.HasAuth {
 		testDID = data.UserDID
 	}
-	return fmt.Sprintf(`{"testDID": "%s", "topicURI": "at://did:plc:test123/quest.dis.topic/topic-123", "results": [], "operation": ""}`, testDID)
+	return fmt.Sprintf(`{"testDID": "%s", "topicURI": "at://did:plc:test123/quest.dis.topic/topic-123", "results": [], "operation": "", "activeView": "pds-browser", "showCreateModal": false, "newTopicTitle": "", "newTopicSummary": "", "newTopicTags": "", "topics": [], "loadingTopics": true, "rows": 0}`, testDID)
 }
 
 type DevPDSPageData struct {
@@ -28,6 +28,15 @@ type DevPDSPageData struct {
 	TestResults     []interface{} // Will be handled by Datastar signals
 	TokenExpired    bool
 	TokenExpiration time.Time
+	Topics          []TopicDisplay
+}
+
+type TopicDisplay struct {
+	Title   string
+	Summary string
+	Tags    string
+	Created string
+	URI     string
 }
 
 func DevPDSPage(data DevPDSPageData) templ.Component {
@@ -51,114 +60,151 @@ func DevPDSPage(data DevPDSPageData) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"container\" data-signals=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"flex h-screen bg-gray-50\" data-signals=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(getInitialSignals(data))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/dev_pds.templ`, Line: 26, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/dev_pds.templ`, Line: 35, Col: 76}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\"><h1>🔧 PDS Development Tools</h1><p>Test and validate ATProtocol PDS functionality</p><!-- Authentication Status -->")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\"><!-- Sidebar --><div class=\"w-64 bg-white shadow-sm h-full overflow-y-auto\"><!-- Logo/Title --><div class=\"px-6 py-4 border-b border-gray-200\"><h2 class=\"text-lg font-semibold text-gray-900\">PDS Dev Console</h2><p class=\"text-xs text-gray-600 mt-1\">ATProtocol Testing</p></div><nav class=\"mt-6 px-4\"><div class=\"space-y-1\"><button data-on-click=\"$activeView = 'pds-browser'\" data-class-bg-gray-100=\"$activeView === 'pds-browser'\" data-class-text-gray-900=\"$activeView === 'pds-browser'\" data-class-text-gray-700=\"$activeView !== 'pds-browser'\" class=\"w-full text-left px-3 py-2 text-sm font-medium hover:bg-gray-50 rounded-md transition-colors\">PDS Browser</button> <button data-on-click=\"$activeView = 'other-tests'\" data-class-bg-gray-100=\"$activeView === 'other-tests'\" data-class-text-gray-900=\"$activeView === 'other-tests'\" data-class-text-gray-700=\"$activeView !== 'other-tests'\" class=\"w-full text-left px-3 py-2 text-sm font-medium hover:bg-gray-50 rounded-md transition-colors\">Other Tests</button> <button data-on-click=\"$activeView = 'implementation-status'\" data-class-bg-gray-100=\"$activeView === 'implementation-status'\" data-class-text-gray-900=\"$activeView === 'implementation-status'\" data-class-text-gray-700=\"$activeView !== 'implementation-status'\" class=\"w-full text-left px-3 py-2 text-sm font-medium hover:bg-gray-50 rounded-md transition-colors\">Implementation Status</button></div></nav></div><!-- Main Content Area --><div class=\"flex-1 flex flex-col h-full overflow-hidden\"><!-- Header --><div class=\"bg-white shadow-sm border-b border-gray-200\"><div class=\"px-6 py-4\"><div class=\"flex items-center justify-between\"><div><h1 class=\"text-2xl font-semibold text-gray-900\">PDS Development Console</h1><p class=\"text-sm text-gray-600 mt-1\">ATProtocol Personal Data Server testing and validation</p></div><div class=\"flex items-center space-x-4\"><!-- Authentication Status in Header -->")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if !data.HasAuth {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div class=\"alert alert-error\"><h3>🚫 Authentication Required</h3><p><strong>You must be logged in to test PDS functionality.</strong></p><p><a href=\"/login?redirect=%2Fdev%2Fpds\" class=\"button\">Login with Bluesky</a></p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div class=\"flex items-center space-x-2\"><span class=\"inline-flex items-center px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs\"><svg class=\"w-3 h-3 mr-1\" fill=\"currentColor\" viewBox=\"0 0 20 20\"><path fill-rule=\"evenodd\" d=\"M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z\" clip-rule=\"evenodd\"></path></svg> Not Authenticated</span> <a href=\"/login?redirect=%2Fdev%2Fpds\" class=\"inline-flex items-center px-3 py-1 border border-red-300 text-xs font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100\">Login</a></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else if data.TokenExpired {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"alert alert-error\"><h3>⏰ Session Expired</h3><p><strong>Your access token has expired and PDS tests will fail.</strong></p><p>Token expired at: <code>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"flex items-center space-x-2\"><span class=\"inline-flex items-center px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs\"><svg class=\"w-3 h-3 mr-1\" fill=\"currentColor\" viewBox=\"0 0 20 20\"><path fill-rule=\"evenodd\" d=\"M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z\" clip-rule=\"evenodd\"></path></svg> Token Expired</span> <a href=\"/login?redirect=%2Fdev%2Fpds\" class=\"inline-flex items-center px-3 py-1 border border-yellow-300 text-xs font-medium rounded-md text-yellow-700 bg-yellow-50 hover:bg-yellow-100\">Re-login</a></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"flex items-center space-x-2\"><span class=\"inline-flex items-center px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs\"><svg class=\"w-3 h-3 mr-1\" fill=\"currentColor\" viewBox=\"0 0 20 20\"><path fill-rule=\"evenodd\" d=\"M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z\" clip-rule=\"evenodd\"></path></svg> Authenticated</span> <span class=\"text-xs text-gray-600 max-w-xs truncate\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 string
-			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(data.TokenExpiration.Format("2006-01-02 15:04:05 MST"))
+			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(data.UserDID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/dev_pds.templ`, Line: 41, Col: 87}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/dev_pds.templ`, Line: 120, Col: 77}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</code></p><p><a href=\"/login?redirect=%2Fdev%2Fpds\" class=\"button\">Re-login to Refresh Token</a></p></div>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div class=\"alert alert-success\"><h3>✅ Authenticated & Ready</h3><p>Your DID: <code>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var4 string
-			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(data.UserDID)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/dev_pds.templ`, Line: 47, Col: 37}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</code></p>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if !data.TokenExpiration.IsZero() {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<p><small>Token expires: ")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var5 string
-				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(data.TokenExpiration.Format("2006-01-02 15:04:05 MST"))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/dev_pds.templ`, Line: 49, Col: 86}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</small></p>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div style=\"margin-top: 1rem;\"><a href=\"/auth/logout?redirect=%2Fdev%2Fpds\" class=\"button button-secondary\" style=\"margin-right: 0.5rem;\">🔄 Force Re-authenticate</a> <small>Use this if PDS operations fail due to scope issues</small></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</span> <a href=\"/auth/logout?redirect=%2Fdev%2Fpds\" class=\"inline-flex items-center px-3 py-1 border border-green-300 text-xs font-medium rounded-md text-green-700 bg-green-50 hover:bg-green-100\">Logout</a></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div class=\"grid\"><!-- Test Controls --><div><h2>Test Operations</h2><details open><summary>Lexicon & Validation Tests</summary><div class=\"test-section\"><button data-on-click=\"$operation = 'validate_lexicons'; @post('/dev/pds/test')\">Test Lexicon Validation</button><p><small>Tests quest.dis.topic schema validation</small></p></div></details> <details open><summary>URI & Parsing Tests</summary><div class=\"test-section\"><button data-on-click=\"$operation = 'test_uri_parsing'; @post('/dev/pds/test')\">Test AT URI Parsing</button><p><small>Tests parsing of at:// URIs</small></p></div></details> <details open><summary>PDS Simulation Tests</summary><div class=\"test-section\"><label>Test DID:</label> <input type=\"text\" data-bind=\"$testDID\" placeholder=\"did:plc:test123456789\"> <button data-on-click=\"$operation = 'simulate_create_topic'; @post('/dev/pds/test')\">Simulate Create Topic</button> <label>Topic URI:</label> <input type=\"text\" data-bind=\"$topicURI\" placeholder=\"at://did:plc:test123/quest.dis.topic/topic-123\"> <button data-on-click=\"$operation = 'simulate_get_topic'; @post('/dev/pds/test')\">Simulate Get Topic</button><p><small>Tests PDS operations without real HTTP calls</small></p></div></details> <details open><summary>Real PDS Structure Tests</summary><div class=\"test-section\"><button data-on-click=\"$operation = 'test_real_pds_structure'; @post('/dev/pds/test')\">Test Real PDS Structure</button><p><small>Tests what would be sent to real PDS (expects auth failure)</small></p></div></details> <details open><summary>Real PDS Browsing</summary><div class=\"test-section\"><button data-on-click=\"$operation = 'browse_real_pds'; @post('/dev/pds/test')\">Browse Real PDS Structure</button><p><small>Attempts to browse your actual PDS (shows auth requirements)</small></p><button data-on-click=\"$operation = 'list_pds_topics'; @post('/dev/pds/test')\">List PDS Topics</button><p><small>Shows what's needed to list your quest.dis.topic records</small></p><button data-on-click=\"$operation = 'get_pds_record'; @post('/dev/pds/test')\">Get PDS Record</button><p><small>Tests retrieving a specific record by AT URI</small></p><button data-on-click=\"$operation = 'create_random_topic'; @post('/dev/pds/test')\">Create Random Topic</button><p><small>Creates a real topic with random data in your PDS</small></p><button data-on-click=\"$operation = 'test_standard_post'; @post('/dev/pds/test')\" class=\"button button-secondary\">Test Standard Post</button><p><small>Creates a standard Bluesky post to test DPoP implementation</small></p><button data-on-click=\"$operation = 'test_session_auth'; @post('/dev/pds/test')\" class=\"button button-secondary\">Test Session Auth (WhiteWind Style)</button><p><small>Tests session-based auth approach that bypasses OAuth scope restrictions</small></p><button data-on-click=\"$operation = 'check_server_scopes'; @post('/dev/pds/test')\" class=\"button\">Check Server Scopes</button><p><small>Shows what OAuth scopes the authorization server supports</small></p></div></details> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"text-xs text-gray-500\"><span class=\"inline-flex items-center px-2 py-1 bg-gray-100 text-gray-800 rounded-full\">Development</span></div></div></div></div></div><!-- Scrollable Content Area --><div class=\"flex-1 overflow-y-auto\"><div class=\"p-6\"><!-- PDS Browser View --><div data-show=\"$activeView === 'pds-browser'\" class=\"space-y-6\" data-on-load=\"$operation = 'list_pds_topics'; @post('/dev/pds/test')\"><section class=\"bg-white rounded-lg shadow-sm border border-gray-200\"><div class=\"px-6 py-4 border-b border-gray-200\"><div class=\"flex items-center justify-between\"><h3 class=\"text-lg font-semibold text-gray-900\">Quest.dis Topics</h3><div class=\"flex items-center space-x-3\"><button data-on-click=\"$loadingTopics = true; $operation = 'list_pds_topics'; @post('/dev/pds/test').finally(() => $loadingTopics = false)\" data-class-opacity-50=\"$loadingTopics\" class=\"inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50\"><svg class=\"w-4 h-4 mr-2\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15\"></path></svg> Refresh</button> <button data-on-click=\"$showCreateModal = true\" class=\"inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700\"><svg class=\"w-4 h-4 mr-2\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M12 4v16m8-8H4\"></path></svg> Create Topic</button></div></div></div><div class=\"overflow-x-auto\"><table class=\"min-w-full divide-y divide-gray-200\"><thead class=\"bg-gray-50\"><tr><th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider\">Title</th><th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider\">Summary</th><th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider\">Tags</th><th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider\">Created</th><th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider\">URI</th></tr></thead> <tbody id=\"topics-table-body\" class=\"bg-white divide-y divide-gray-200\" data-merge=\"morph\"><tr data-show=\"$loadingTopics\"><td colspan=\"5\" class=\"px-6 py-4 text-center text-sm text-gray-500\"><div class=\"flex items-center justify-center\"><svg class=\"animate-spin h-5 w-5 mr-3\" fill=\"none\" viewBox=\"0 0 24 24\"><circle cx=\"12\" cy=\"12\" r=\"10\" stroke=\"currentColor\" stroke-width=\"4\" class=\"opacity-25\"></circle> <path fill=\"currentColor\" class=\"opacity-75\" d=\"M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z\"></path></svg> Loading topics...</div></td></tr><tr data-show=\"!$loadingTopics && $rows == 0\"><td colspan=\"5\" class=\"px-6 py-4 text-center text-sm text-gray-500\">No topics found. Create your first topic to get started!</td></tr></tbody></table></div></section></div><!-- Other Tests View --><div data-show=\"$activeView === 'other-tests'\" class=\"space-y-6\"><section class=\"bg-white rounded-lg shadow-sm border border-gray-200\"><div class=\"px-4 py-3 border-b border-gray-200\"><h3 class=\"text-sm font-semibold text-gray-900\">Other PDS Tests</h3></div><div class=\"p-4\"><div class=\"grid grid-cols-1 gap-3\"><div class=\"flex items-start space-x-3\"><button data-on-click=\"$operation = 'get_pds_record'; @post('/dev/pds/test')\" class=\"flex-shrink-0 inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white bg-blue-600 hover:bg-blue-700\">Get Record</button><p class=\"text-xs text-gray-600\">Retrieve specific record by AT URI</p></div><div class=\"flex items-start space-x-3\"><button data-on-click=\"$operation = 'check_server_scopes'; @post('/dev/pds/test')\" class=\"flex-shrink-0 inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white bg-blue-600 hover:bg-blue-700\">Check Scopes</button><p class=\"text-xs text-gray-600\">Show OAuth scopes supported</p></div></div></div></section><!-- Test Results --><section class=\"bg-white rounded-lg shadow-sm border border-gray-200\"><div class=\"px-4 py-3 border-b border-gray-200\"><h3 class=\"text-sm font-semibold text-gray-900\">Test Results</h3></div><div class=\"p-4\"><div id=\"test-results\" class=\"min-h-[200px] p-4 bg-gray-50 border border-gray-200 rounded text-sm\"><p class=\"text-gray-500 italic\">Run tests to see results here...</p></div></div></section></div><!-- Implementation Status View --><div data-show=\"$activeView === 'implementation-status'\" class=\"space-y-6\"><section class=\"bg-white rounded-lg shadow-sm border border-gray-200\"><div class=\"px-6 py-4 border-b border-gray-200\"><h2 class=\"text-lg font-semibold text-gray-900\">Implementation Status</h2></div><div class=\"p-6\"><div class=\"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4\"><div class=\"flex items-center p-3 bg-green-50 border border-green-200 rounded-lg\"><svg class=\"w-5 h-5 text-green-500 mr-3\" fill=\"currentColor\" viewBox=\"0 0 20 20\"><path fill-rule=\"evenodd\" d=\"M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z\" clip-rule=\"evenodd\"></path></svg><div><div class=\"text-sm font-medium text-green-900\">XRPC Client</div><div class=\"text-xs text-green-700\">Generic ATProtocol operations</div></div></div><div class=\"flex items-center p-3 bg-green-50 border border-green-200 rounded-lg\"><svg class=\"w-5 h-5 text-green-500 mr-3\" fill=\"currentColor\" viewBox=\"0 0 20 20\"><path fill-rule=\"evenodd\" d=\"M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z\" clip-rule=\"evenodd\"></path></svg><div><div class=\"text-sm font-medium text-green-900\">Lexicon Framework</div><div class=\"text-xs text-green-700\">quest.dis.* schema validation</div></div></div><div class=\"flex items-center p-3 bg-green-50 border border-green-200 rounded-lg\"><svg class=\"w-5 h-5 text-green-500 mr-3\" fill=\"currentColor\" viewBox=\"0 0 20 20\"><path fill-rule=\"evenodd\" d=\"M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z\" clip-rule=\"evenodd\"></path></svg><div><div class=\"text-sm font-medium text-green-900\">Real PDS Service</div><div class=\"text-xs text-green-700\">Production implementation</div></div></div><div class=\"flex items-center p-3 bg-yellow-50 border border-yellow-200 rounded-lg\"><svg class=\"w-5 h-5 text-yellow-500 mr-3\" fill=\"currentColor\" viewBox=\"0 0 20 20\"><path fill-rule=\"evenodd\" d=\"M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z\" clip-rule=\"evenodd\"></path></svg><div><div class=\"text-sm font-medium text-yellow-900\">Access Token Integration</div><div class=\"text-xs text-yellow-700\">User session → PDS auth</div></div></div><div class=\"flex items-center p-3 bg-yellow-50 border border-yellow-200 rounded-lg\"><svg class=\"w-5 h-5 text-yellow-500 mr-3\" fill=\"currentColor\" viewBox=\"0 0 20 20\"><path fill-rule=\"evenodd\" d=\"M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z\" clip-rule=\"evenodd\"></path></svg><div><div class=\"text-sm font-medium text-yellow-900\">DPoP Headers</div><div class=\"text-xs text-yellow-700\">Enhanced security</div></div></div></div></div></section></div></div></div></div><!-- Create Topic Modal --><div data-show=\"$showCreateModal\" class=\"fixed inset-0 z-50 overflow-y-auto\"><div class=\"flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0\"><!-- Background overlay --><div class=\"fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity\" data-on-click=\"$showCreateModal = false\"></div><!-- Modal panel --><div class=\"inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full\"><div class=\"bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4\"><div class=\"sm:flex sm:items-start\"><div class=\"mt-3 text-center sm:mt-0 sm:text-left w-full\"><h3 class=\"text-lg leading-6 font-medium text-gray-900 mb-4\">Create New Topic</h3><form class=\"space-y-4\"><div><label class=\"block text-sm font-medium text-gray-700 mb-1\">Title</label> <input type=\"text\" data-bind=\"$newTopicTitle\" placeholder=\"Enter topic title\" class=\"block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500\" required></div><div><label class=\"block text-sm font-medium text-gray-700 mb-1\">Summary</label> <textarea data-bind=\"$newTopicSummary\" placeholder=\"Enter topic summary\" rows=\"3\" class=\"block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500\" required></textarea></div><div><label class=\"block text-sm font-medium text-gray-700 mb-1\">Tags</label> <input type=\"text\" data-bind=\"$newTopicTags\" placeholder=\"tag1, tag2, tag3\" class=\"block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500\"><p class=\"mt-1 text-xs text-gray-500\">Separate tags with commas</p></div></form></div></div></div><div class=\"bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse\"><button data-on-click=\"$operation = 'create_topic_modal'; @post('/dev/pds/test'); $showCreateModal = false\" class=\"w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm\">Create Topic</button> <button data-on-click=\"$showCreateModal = false; $newTopicTitle = ''; $newTopicSummary = ''; $newTopicTags = ''\" class=\"mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm\">Cancel</button></div></div></div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if data.HasAuth {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<details><summary>🔓 Authenticated PDS Access</summary><div class=\"test-section\"><p><strong>Your DID:</strong> <code>")
+		return nil
+	})
+}
+
+func TopicRows(topics []TopicDisplay) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var4 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var4 == nil {
+			templ_7745c5c3_Var4 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		for _, topic := range topics {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<tr class=\"hover:bg-gray-50\"><td class=\"px-6 py-4 whitespace-nowrap text-sm text-gray-900\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var5 string
+			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(topic.Title)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/dev_pds.templ`, Line: 377, Col: 78}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</td><td class=\"px-6 py-4 text-sm text-gray-700\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var6 string
-			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(data.UserDID)
+			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(topic.Summary)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/dev_pds.templ`, Line: 195, Col: 57}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/dev_pds.templ`, Line: 378, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</code></p><p><strong>Next:</strong> Wire up your access token to see real records!</p><p><small>With auth integration, you could see actual quest.dis.* records in your PDS</small></p></div></details>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</td><td class=\"px-6 py-4 whitespace-nowrap text-sm text-gray-500\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</div><!-- Results Panel --><div><h2>Test Results</h2><div id=\"test-results\"><p><em>Run tests to see results here...</em></p></div></div></div><!-- Current Implementation Status --><details><summary>📋 Implementation Status</summary><div class=\"status-grid\"><div class=\"status-item completed\"><h4>✅ XRPC Client</h4><p>Generic ATProtocol operations</p></div><div class=\"status-item completed\"><h4>✅ Lexicon Framework</h4><p>quest.dis.* schema validation</p></div><div class=\"status-item completed\"><h4>✅ Real PDS Service</h4><p>Production implementation</p></div><div class=\"status-item pending\"><h4>🔄 Access Token Integration</h4><p>User session → PDS auth</p></div><div class=\"status-item pending\"><h4>🔄 DPoP Headers</h4><p>Enhanced security</p></div></div></details><style>\n\t\t\t.test-section {\n\t\t\t\tmargin: 1rem 0;\n\t\t\t\tpadding: 1rem;\n\t\t\t\tborder: 1px solid var(--muted-border-color);\n\t\t\t\tborder-radius: 0.5rem;\n\t\t\t}\n\t\t\t.test-section button {\n\t\t\t\tmargin: 0.5rem 0;\n\t\t\t}\n\t\t\t.test-section input {\n\t\t\t\twidth: 100%;\n\t\t\t\tmargin: 0.5rem 0;\n\t\t\t}\n\t\t\t.test-result {\n\t\t\t\tmargin: 1rem 0;\n\t\t\t\tpadding: 1rem;\n\t\t\t\tborder-radius: 0.5rem;\n\t\t\t\tborder: 1px solid;\n\t\t\t}\n\t\t\t.result-success {\n\t\t\t\tborder-color: var(--valid-color, green);\n\t\t\t\tbackground-color: color-mix(in srgb, var(--valid-color, green) 10%, transparent);\n\t\t\t}\n\t\t\t.result-error {\n\t\t\t\tborder-color: var(--invalid-color, red);\n\t\t\t\tbackground-color: color-mix(in srgb, var(--invalid-color, red) 10%, transparent);\n\t\t\t}\n\t\t\t.result-details {\n\t\t\t\tbackground: var(--code-background-color, #f5f5f5);\n\t\t\t\tpadding: 0.5rem;\n\t\t\t\tborder-radius: 0.25rem;\n\t\t\t\tfont-family: monospace;\n\t\t\t\twhite-space: pre-wrap;\n\t\t\t}\n\t\t\t.status-grid {\n\t\t\t\tdisplay: grid;\n\t\t\t\tgrid-template-columns: repeat(auto-fit, minmax(200px, 1fr));\n\t\t\t\tgap: 1rem;\n\t\t\t\tmargin: 1rem 0;\n\t\t\t}\n\t\t\t.status-item {\n\t\t\t\tpadding: 1rem;\n\t\t\t\tborder-radius: 0.5rem;\n\t\t\t\tborder: 1px solid;\n\t\t\t}\n\t\t\t.status-item.completed {\n\t\t\t\tborder-color: var(--valid-color, green);\n\t\t\t\tbackground-color: color-mix(in srgb, var(--valid-color, green) 10%, transparent);\n\t\t\t}\n\t\t\t.status-item.pending {\n\t\t\t\tborder-color: var(--warning-color, orange);\n\t\t\t\tbackground-color: color-mix(in srgb, var(--warning-color, orange) 10%, transparent);\n\t\t\t}\n\t\t\t.alert {\n\t\t\t\tpadding: 1rem;\n\t\t\t\tborder-radius: 0.5rem;\n\t\t\t\tmargin: 1rem 0;\n\t\t\t\tborder: 1px solid;\n\t\t\t}\n\t\t\t.alert-success {\n\t\t\t\tborder-color: var(--valid-color, green);\n\t\t\t\tbackground-color: color-mix(in srgb, var(--valid-color, green) 10%, transparent);\n\t\t\t}\n\t\t\t.alert-warning {\n\t\t\t\tborder-color: var(--warning-color, orange);\n\t\t\t\tbackground-color: color-mix(in srgb, var(--warning-color, orange) 10%, transparent);\n\t\t\t}\n\t\t\t.alert-error {\n\t\t\t\tborder-color: var(--invalid-color, red);\n\t\t\t\tbackground-color: color-mix(in srgb, var(--invalid-color, red) 10%, transparent);\n\t\t\t}\n\t\t\t.button {\n\t\t\t\tdisplay: inline-block;\n\t\t\t\tpadding: 0.5rem 1rem;\n\t\t\t\tbackground-color: var(--primary-color, #007bff);\n\t\t\t\tcolor: white;\n\t\t\t\ttext-decoration: none;\n\t\t\t\tborder-radius: 0.25rem;\n\t\t\t\tborder: none;\n\t\t\t\tcursor: pointer;\n\t\t\t}\n\t\t\t.button:hover {\n\t\t\t\tbackground-color: var(--primary-hover-color, #0056b3);\n\t\t\t\tcolor: white;\n\t\t\t}\n\t\t\t.button-secondary {\n\t\t\t\tbackground-color: var(--secondary-color, #6c757d);\n\t\t\t\tborder: 1px solid var(--secondary-color, #6c757d);\n\t\t\t}\n\t\t\t.button-secondary:hover {\n\t\t\t\tbackground-color: var(--secondary-hover-color, #545b62);\n\t\t\t\tcolor: white;\n\t\t\t}\n\t\t</style></div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
+			var templ_7745c5c3_Var7 string
+			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(topic.Tags)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/dev_pds.templ`, Line: 379, Col: 77}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</td><td class=\"px-6 py-4 whitespace-nowrap text-sm text-gray-500\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var8 string
+			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(topic.Created)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/dev_pds.templ`, Line: 380, Col: 80}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</td><td class=\"px-6 py-4 text-xs text-gray-400 font-mono\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var9 string
+			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(topic.URI)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `components/dev_pds.templ`, Line: 381, Col: 68}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</td></tr>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
 		return nil
 	})

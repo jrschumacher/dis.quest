@@ -3,12 +3,12 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-# Run templ generate before building Go code
-pre_cmd = ["templ generate"]
+# Run CSS build and templ generate before building Go code
+pre_cmd = ["tailwindcss -i ./assets/css/input.css -o ./assets/css/tailwind.css --minify", "templ generate"]
 cmd = "go build -o ./tmp/main ."
 bin = "tmp/main"
 full_bin = "APP_ENV=development ./tmp/main server"
-include_ext = ["go", "templ"]
+include_ext = ["go", "templ", "css"]
 exclude_dir = ["assets", "tmp", "vendor", "frontend/node_modules", "bin", "api", "lexicons", "internal/pds"]
 exclude_file = ["components/components_templ.go"]
 exclude_regex = ["_test\\.go"]

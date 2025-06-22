@@ -52,6 +52,12 @@ tasks:
           echo "✅ ngrok found"
         fi
 
+        if ! command -v tailwindcss &> /dev/null; then
+          echo "⚠️  tailwindcss not found (required for CSS building)"
+        else
+          echo "✅ tailwindcss found"
+        fi
+
         if [ -n "$missing_tools" ]; then
           echo ""
           echo "Missing required tools:$missing_tools"
@@ -123,6 +129,7 @@ tasks:
   build:
     deps: [check-tools]
     cmds:
+      - tailwindcss -i ./assets/css/input.css -o ./assets/css/tailwind.css --minify
       - templ generate
       - sqlc generate
       - go build -o bin/disquest ./
@@ -130,6 +137,11 @@ tasks:
   docker:
     cmds:
       - docker build .
+
+  css:
+    desc: Build CSS with Tailwind
+    cmds:
+      - tailwindcss -i ./assets/css/input.css -o ./assets/css/tailwind.css --minify
 
   watch:
     desc: Hot reload development server (alias for dev)
