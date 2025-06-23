@@ -20,3 +20,7 @@ dis.quest
 disquest.db
 disquest.db-shm
 disquest.db-wal
+
+# Tailwind CSS
+tailwindcss
+assets/css/tailwind.css

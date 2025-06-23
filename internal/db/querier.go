@@ -28,6 +28,7 @@ type Querier interface {
 	GetRepliesByMessage(ctx context.Context, arg GetRepliesByMessageParams) ([]Message, error)
 	GetTopic(ctx context.Context, arg GetTopicParams) (Topic, error)
 	GetTopicsByCategory(ctx context.Context, arg GetTopicsByCategoryParams) ([]Topic, error)
+	GetTopicsByDID(ctx context.Context, did string) ([]Topic, error)
 	ListTopics(ctx context.Context, arg ListTopicsParams) ([]Topic, error)
 	UpdateParticipationStatus(ctx context.Context, arg UpdateParticipationStatusParams) error
 	UpdateTopicSelectedAnswer(ctx context.Context, arg UpdateTopicSelectedAnswerParams) error

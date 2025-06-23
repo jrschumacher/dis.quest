@@ -52,5 +52,9 @@ oauth_client_id: https://dis.quest/auth/client-metadata.json
 # For development, use your ngrok URL (e.g., https://abc123.ngrok.app/auth/callback)
 oauth_redirect_url: https://dis.quest/auth/callback
 
+# OAuth provider implementation to use: "manual" (current) or "tangled" (tangled-sh library)
+# Use "manual" for your current implementation, "tangled" to test the tangled-sh library
+oauth_provider: manual
+
 # Logging verbosity. One of: DEBUG, INFO, WARN, ERROR.
 log_level: INFO

@@ -8,6 +8,8 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/config"
 	"github.com/jrschumacher/dis.quest/internal/db"
 	"github.com/jrschumacher/dis.quest/internal/logger"
+	"github.com/jrschumacher/dis.quest/pkg/atproto"
+	"github.com/jrschumacher/dis.quest/internal/lexicons"
 	apphandlers "github.com/jrschumacher/dis.quest/server/app"
 	authhandlers "github.com/jrschumacher/dis.quest/server/auth-handlers"
 	wellknownhandlers "github.com/jrschumacher/dis.quest/server/dot-well-known-handlers"
@@ -23,7 +25,7 @@ const (
 	contentTypeOptions    = "nosniff"
 	frameOptions          = "DENY"
 	xssProtection         = "1; mode=block"
-	contentSecurityPolicy = "default-src 'self'"
+	contentSecurityPolicy = "default-src 'self'; script-src 'self' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'"
 	referrerPolicy        = "strict-origin-when-cross-origin"
 )
 
@@ -46,12 +48,45 @@ func Start(cfg *config.Config) {
 		}
 	}()
 
+	// Initialize ATProtocol client with configured provider
+	atprotoConfig := atproto.Config{
+		ClientID:       cfg.OAuthClientID,
+		ClientURI:      cfg.PublicDomain,
+		RedirectURI:    cfg.OAuthRedirectURL,
+		PDSEndpoint:    cfg.PDSEndpoint,
+		JWKSPrivateKey: cfg.JWKSPrivate,
+		JWKSPublicKey:  cfg.JWKSPublic,
+		Scope:          "atproto transition:generic",
+	}
+
+	atprotoClient, err := atproto.New(atprotoConfig)
+	if err != nil {
+		logger.Error("failed to initialize ATProtocol client", "error", err)
+		panic("failed to initialize ATProtocol client")
+	}
+
+	// Initialize PDS service (real ATProtocol implementation)
+	pdsService := lexicons.NewLegacyPDSService()
+
 	mux := http.NewServeMux()
 
+	// Serve static assets with existence check
+	mux.HandleFunc("/assets/", func(w http.ResponseWriter, r *http.Request) {
+		assetPath := "." + r.URL.Path
+		if fi, err := http.Dir(".").Open(assetPath); err == nil {
+			if closeErr := fi.Close(); closeErr != nil {
+				logger.Error("failed to close file", "error", closeErr)
+			}
+			http.ServeFile(w, r, assetPath)
+		} else {
+			http.NotFound(w, r)
+		}
+	})
+
 	wellknownhandlers.RegisterRoutes(mux, "/.well-known", cfg)
-	authhandlers.RegisterRoutes(mux, "/auth", cfg)
+	authhandlers.RegisterRoutes(mux, "/auth", cfg, atprotoClient)
 	healthhandlers.RegisterRoutes(mux, "/health", cfg)
-	apphandlers.RegisterRoutes(mux, "/", cfg, dbService)
+	apphandlers.RegisterRoutes(mux, "/", cfg, dbService, pdsService, atprotoClient)
 
 	// Secure headers middleware
 	handler := secureHeaders(mux)

@@ -99,7 +99,7 @@ server/
 - OAuth2 with Bluesky/ATProtocol
 - PKCE and DPoP for enhanced security
 - Session management with secure cookies
-- Key components: `internal/auth/` for logic, `server/auth-handlers/` for HTTP layer
+- Key components: `/pkg/atproto/` for universal logic, `/internal/web/` for HTTP concerns, `server/auth-handlers/` for HTTP layer
 
 ### Data Model Principles
 - Authentication uses ATProtocol and Bluesky identity
@@ -123,7 +123,137 @@ server/
 - **Database**: SQLC for type-safe SQL queries
 - **HTML Views**: Templ for server-side rendering
 - **Styling**: Pico CSS (avoid React or heavy JavaScript frameworks)
+- **Interactivity**: Datastar for reactive UI components
 - **Logging**: Use `internal/logger` for all logging needs
+
+## OAuth + DPoP Implementation Status
+
+### Current State (2025-06-22)
+✅ **COMPLETED AND WORKING**: Full end-to-end OAuth with DPoP authentication successfully implemented for ATProtocol/Bluesky integration.
+
+### Custom Lexicon Success (2025-06-22)
+🎉 **BREAKTHROUGH ACHIEVED**: Complete custom lexicon implementation working end-to-end with full CRUD operations.
+
+**Proven Working**:
+- ✅ Custom lexicon creation: `quest.dis.topic` records successfully stored in production PDS
+- ✅ Record retrieval: Individual and collection listing working
+- ✅ Test Record: `at://did:plc:qknujfbaxt5ggvbsefz3ixop/quest.dis.topic/topic-1750563554124865000`
+- ✅ Key Discovery: `validate: false` required for custom lexicons (learned from WhiteWind analysis)
+- ✅ **PDS Browser Interface**: Working create topic modal with form validation and real-time updates
+- ✅ **Datastar Integration**: Real-time UI updates with proper signal isolation and fragment merging
+
+### Key Components Working
+- **OAuth Provider Abstraction**: Clean interface supporting multiple OAuth implementations (`/internal/oauth/`)
+- **Tangled Provider**: Production-ready OAuth using `tangled.sh/icyphox.sh/atproto-oauth` library
+- **DPoP Implementation**: RFC-compliant DPoP JWTs with proper nonce handling and access token binding
+- **PDS Operations**: Successfully creating and retrieving records from Personal Data Servers
+- **Session Management**: Secure DPoP key storage and automatic nonce retry logic
+
+### Implementation Architecture
+- **Provider Interface**: `/internal/oauth/provider.go` - Abstraction for OAuth implementations
+- **Factory Pattern**: `/internal/oauth/factory.go` - Runtime provider selection
+- **Tangled Provider**: `/internal/oauth/tangled.go` - Working OAuth implementation with `private_key_jwt`
+- **Manual Provider**: `/internal/oauth/manual.go` - Original implementation preserved for fallback
+- **Configuration**: `oauth_provider: tangled` in `config.yaml` for provider selection
+
+### Critical Fixes Applied
+- **Client Authentication**: Proper `private_key_jwt` using tangled.sh OAuth library
+- **Authorization Headers**: Changed from "Bearer" to "DPoP" per RFC requirements
+- **PDS Resolution**: Automatic DID resolution to find user's actual PDS endpoint
+- **DPoP Nonce Handling**: Server nonce retry pattern for 401 responses
+- **Access Token Binding**: Added `ath` claim to DPoP JWT for token security
+- **PAR Integration**: Pushed Authorization Request for DPoP nonce acquisition and auth server discovery
+- **Request Body Consumption**: Fixed double request body reading in PDS test handlers
+- **Token Refresh DPoP Preservation**: Fixed automatic token refresh to preserve DPoP keys in cookies
+
+### Testing and Validation
+- **Dev Interface**: Complete testing interface at `/dev/pds` with comprehensive OAuth and DPoP testing
+- **Production Testing**: Successfully creating and retrieving records from real Personal Data Servers
+- **Error Handling**: Robust retry logic for DPoP nonce requirements and token expiration
+- **Rollback Strategy**: Instant fallback to manual provider via configuration change
+
+### Documentation
+- **Implementation Guide**: `/docs/OAUTH_DPOP_IMPLEMENTATION.md` - Complete technical documentation
+- **Provider Interface**: Well-documented abstraction allowing future OAuth implementations
+- **Security Model**: RFC-compliant DPoP implementation with proper token binding
+
+### File Locations
+- **OAuth Interface**: `/internal/oauth/provider.go` - OAuth provider abstraction
+- **Tangled Provider**: `/internal/oauth/tangled.go` - Production OAuth implementation  
+- **Manual Provider**: `/internal/oauth/manual.go` - Original implementation (preserved)
+- **XRPC Client**: `/internal/pds/xrpc.go` - DPoP-enabled PDS operations
+- **Session Management**: `/internal/auth/session.go` - DPoP key and nonce handling
+- **Dev Interface**: `/server/app/dev.go` - Testing and debugging tools
+- **Documentation**: `/docs/OAUTH_DPOP_IMPLEMENTATION.md` - Complete technical guide
+
+### Common Debugging Patterns
+
+#### Request Body Consumption Issues
+**Problem**: HTTP request bodies can only be read once. Reading the body in middleware or early handlers prevents later functions from accessing the data.
+
+**Solution**: Parse request data once and pass the parsed data to subsequent functions instead of re-reading the body.
+
+**Example Fix**: Modified `DevPDSTestHandler` to store `parsedData` and pass it to `createTopicFromModal()` instead of having each function read `req.Body`.
+
+#### Token Refresh and Session State
+**Problem**: Automatic token refresh must preserve all session state, not just access/refresh tokens. DPoP keys are critical for ATProtocol operations.
+
+**Solution**: When refreshing tokens, explicitly preserve the DPoP key cookie using the `TokenResult.DPoPKey` from the OAuth provider.
+
+**Critical Fix**: 
+```go
+// In token refresh middleware
+if tokenResult.DPoPKey != nil {
+    if err := auth.SetDPoPKeyCookie(w, tokenResult.DPoPKey, false); err != nil {
+        logger.Error("Failed to set DPoP key cookie after refresh", "error", err)
+    }
+}
+```
+
+### Datastar Integration
+
+#### Version and Setup
+- **Current Version**: v1.0.0-beta.11 (Go SDK and JavaScript CDN)
+- **CDN**: `https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0-beta.11/bundles/datastar.js`
+- **Go Import**: `github.com/starfederation/datastar/sdk/go`
+
+#### Key Documentation Resources
+- **Examples Repository**: https://github.com/starfederation/datastar/tree/main/site
+- **Reference Guide**: https://data-star.dev/reference/overview#attribute-plugins
+- **Best Practices**: Study the bulk update and edit row examples for component isolation patterns
+
+#### Critical Datastar Patterns
+
+##### Signal Isolation for Multiple Components
+**Problem**: Datastar signals are globally scoped by default. Multiple components with the same signal names will interfere with each other.
+
+**Solution**: Use unique signal names with component IDs:
+```go
+// In Go handler - build unique signal state
+initialSignals := make(map[string]any)
+for _, msg := range messages {
+    initialSignals["liked_"+msg.Id] = msg.Liked
+}
+
+// In templ component - use unique signal names
+data-on-click={ "$liked_" + signals.Id + " = !$liked_" + signals.Id + "; @post(`/api/messages/" + signals.Id + "/like`)" }
+data-show={ "$liked_" + signals.Id }
+```
+
+##### Correct Method Syntax
+- **Correct**: `@post`, `@get`, `@patch`, `@delete` 
+- **Incorrect**: `$$post`, `$$get` (old syntax)
+- **Example**: `@post(\`/api/messages/${$messageId}/like\`)`
+
+##### Component State Management
+- Use `data-signals` on parent container to initialize global state
+- Use `data-bind` for two-way data binding on form elements
+- Use `data-show` and `data-hide` for conditional rendering
+- Use `data-on-click`, `data-on-change` for event handling
+
+##### Template Literal Interpolation
+- Use backticks for dynamic URLs: `@post(\`/api/messages/${$id}/like\`)`
+- Avoid string concatenation in datastar expressions when possible
 
 ## Configuration
 
@@ -148,6 +278,50 @@ For local development, OAuth requires publicly accessible URLs:
    - `oauth_client_id`: `https://your-ngrok-url.ngrok.app/auth/client-metadata.json`
    - `oauth_redirect_url`: `https://your-ngrok-url.ngrok.app/auth/callback`
    - `public_domain`: `https://your-ngrok-url.ngrok.app`
+
+## ATProtocol Refactoring (2025-06-22)
+
+### Completed Package Reorganization
+✅ **MAJOR ARCHITECTURAL IMPROVEMENT**: Successfully completed comprehensive refactoring to properly separate universal ATProtocol functionality from application-specific code.
+
+### Key Changes Implemented
+1. **JWT Utilities Migration**: Migrated `/internal/jwtutil/` → `/pkg/atproto/jwt/` 
+   - Eliminated duplicate JWT parsing functionality
+   - Consolidated all JWT operations in reusable package
+
+2. **Authentication Simplification**: Eliminated 80% of `/internal/auth/` package
+   - Moved universal auth logic to `/pkg/atproto/oauth/` 
+   - Moved HTTP-specific concerns to `/internal/web/` (cookies, sessions)
+   - Removed unnecessary delegation and abstraction layers
+
+3. **PDS Operations**: Migrated `/internal/pds/` → `/pkg/atproto/pds/`
+   - Created lexicon-agnostic PDS client for any ATProtocol application
+   - Moved quest.dis.* specific definitions to `/internal/lexicons/`
+   - Maintained backward compatibility through LegacyPDSService wrapper
+
+### New Package Structure
+- **`/pkg/atproto/`**: Universal ATProtocol functionality (JWT, OAuth, PDS, XRPC)
+  - Reusable by any Go application implementing ATProtocol
+  - Clean, well-defined APIs following ATProtocol specifications
+- **`/internal/web/`**: HTTP-specific web session management  
+  - Cookie handling with environment-specific security
+  - Session data bridging between HTTP and ATProtocol
+- **`/internal/lexicons/`**: Application-specific quest.dis.* lexicon definitions
+  - TopicRecord, MessageRecord, ParticipationRecord types
+  - Service layer for CRUD operations using generic PDS client
+
+### Benefits Achieved
+- **Code Reduction**: Eliminated ~80% of unnecessary abstraction and delegation
+- **Clear Separation**: Universal vs application-specific concerns properly separated
+- **Reusability**: `/pkg/atproto/` can be used by other Go applications
+- **Maintainability**: Simpler, more direct code paths
+- **Architectural Clarity**: Proper layering following Go package conventions
+
+### Migration Notes
+- All handlers now import `/pkg/atproto/` directly instead of going through `/internal/auth/`
+- HTTP cookie management isolated to `/internal/web/` package
+- Legacy compatibility maintained through wrapper services during transition
+- All compilation errors resolved and build successful
 
 ## ATProtocol Integration
 

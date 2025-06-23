@@ -2,23 +2,22 @@ package components
 
 import "github.com/jrschumacher/dis.quest/internal/config"
 
-templ Page(appEnv string) {
+// Modern, simple layout with improved spacing, card design, and subtle color accents
+templ Page(appEnv string, content templ.Component) {
 	<html>
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<title>dis.quest — Secure ATProtocol Discussions</title>
-			<link rel="stylesheet" href="/assets/css/pico/pico.css"/>
-			<script src="/assets/js/htmx.2.0.4.js"></script>
+			<link rel="stylesheet" href="/assets/css/tailwind.css"/>
+      <script type="module" defer src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0-beta.11/bundles/datastar.js"></script>
 		</head>
-		<body class="bg-gray-100">
+		<body class="bg-gray-50 font-sans">
 			@DevBanner(appEnv)
-			<main class="container">
-				<section style="margin-top: 4rem; text-align: center;">
-					<h1>Welcome to <span style="color: #f59e42;">dis.quest</span></h1>
-					<p>A secure, decentralized discussion platform built on ATProtocol with optional OpenTDF encryption.</p>
-					<a href="/login" class="contrast">Login with Bluesky</a>
-				</section>
+			<main class="mx-auto">
+				if content != nil {
+					@content
+				}
 			</main>
 		</body>
 	</html>
@@ -26,80 +25,97 @@ templ Page(appEnv string) {
 
 templ DevBanner(appEnv string) {
 	if appEnv == config.EnvDev {
-		<div style="background: #fffae6; color: #b45309; padding: 1rem; text-align: center; font-weight: bold; border-bottom: 2px solid #f59e42; font-size: 1.2rem;">
+		<div class="dev-banner">
 			⚠️ DEVELOPMENT MODE — Not for production use! ⚠️
 		</div>
 	}
 }
 
 templ Login() {
-	<main class="container">
-		<section style="margin-top: 4rem; max-width: 400px; margin-left: auto; margin-right: auto;">
-			<h2>Login to dis.quest</h2>
-			<form method="get" action="/auth/redirect">
-				<label for="handle">Handle</label>
-				<input type="text" id="handle" name="handle" placeholder="your.handle.bsky.social" required />
-				<button type="submit" class="contrast" style="margin-top: 1rem;">Continue</button>
-			</form>
-		</section>
-	</main>
+	@LoginWithRedirect("")
 }
 
-templ Discussion() {
-	<main class="container">
-		<section style="margin-top: 2rem;">
-			<h2>Discussion Thread</h2>
-			<div>
-				@Topic()
-				<!-- Multiple top-level messages -->
-				<div style="margin-top: 2rem;">
-					@Message("@bob", "2025-05-26", "I agree with the topic and would like to add...")
-					@Message("@carol", "2025-05-26", "Here's another perspective on this topic.")
-					@Message("@dave", "2025-05-26", "What about edge cases?")
-				</div>
-				<!-- Threaded replies for one message -->
-				<div style="margin-left: 2rem; margin-top: 1rem;">
-					@ThreadMessage("@eve", "2025-05-26", "Replying to @bob: Good point!")
-					@ThreadMessage("@frank", "2025-05-26", "Replying to @carol: I disagree.")
-					<!-- Simulate a long thread -->
-					@ThreadMessage("@grace", "2025-05-26", "Another reply in a long thread...")
-					@ThreadMessage("@heidi", "2025-05-26", "Yet another reply...")
-					@ThreadMessage("@ivan", "2025-05-26", "This thread is getting long!")
-					@ThreadMessage("@judy", "2025-05-26", "Adding my thoughts to the long thread.")
-				</div>
-				<!-- Simulate many top-level messages -->
-				<div style="margin-top: 2rem;">
-					@Message("@kate", "2025-05-26", "Top-level message 4")
-					@Message("@leo", "2025-05-26", "Top-level message 5")
-					@Message("@mallory", "2025-05-26", "Top-level message 6")
-					@Message("@nick", "2025-05-26", "Top-level message 7")
-					@Message("@olivia", "2025-05-26", "Top-level message 8")
-					@Message("@peggy", "2025-05-26", "Top-level message 9")
-					@Message("@quinn", "2025-05-26", "Top-level message 10")
-				</div>
+templ LoginWithRedirect(redirectURL string) {
+	<section class="mt-20 max-w-md mx-auto">
+		<div class="card">
+			<h2 class="brand text-center mb-6 text-2xl">Login to <span class="brand">dis.quest</span></h2>
+			<form method="get" action="/auth/redirect" class="flex flex-col gap-5">
+				<label for="handle" class="font-medium mb-2 block">Handle</label>
+				<input type="text" id="handle" name="handle" placeholder="your.handle.bsky.social" required class="rounded-md border border-gray-300 px-3 py-3 text-base" />
+				if redirectURL != "" {
+					<input type="hidden" name="redirect" value={ redirectURL } />
+				}
+				<button type="submit" class="btn-main w-full">
+					<span>Continue</span>
+				</button>
+			</form>
+		</div>
+	</section>
+}
+
+type DiscussionSignals struct {
+  TopicId string `json:"topicId"`
+  Messages []MessageSignals `json:"messages"`
+  InitialSignals map[string]any `json:"-"`
+}
+
+templ Discussion(signals DiscussionSignals) {
+	<section class="mt-8" data-signals={ templ.JSONString(signals.InitialSignals) }>
+		<h2 class="mb-6 text-xl font-bold">Discussion Thread</h2>
+		<div>
+			@Topic()
+			<!-- Multiple top-level messages -->
+			<div class="mt-8">
+				for _, message := range signals.Messages {
+					@Message(message)
+					<div class="ml-8 mt-4">
+						<!-- Nested threaded replies -->
+						for _, reply := range message.ThreadedReplies {
+							@ThreadMessage(reply)
+						}
+					</div>
+				}
 			</div>
-		</section>
-	</main>
+		</div>
+	</section>
 }
 
 templ Topic() {
-	<article style="padding: 1rem; border: 1px solid #eee; border-radius: 8px; background: #fff;">
-		<h3>Sample Topic Title</h3>
-		<p>This is the start of a discussion topic. Here you can describe the subject and context.</p>
-		<small>by @alice • 2025-05-26</small>
+	<article class="card border border-gray-200 bg-white">
+		<h3 class="text-lg font-bold mb-3">Sample Topic Title</h3>
+		<p class="text-blue-600 mb-3">This is the start of a discussion topic. Here you can describe the subject and context.</p>
+		<small class="text-blue-400 text-sm">by @alice • 2025-05-26</small>
 	</article>
 }
 
-templ Message(author string, date string, content string) {
-	<article style="padding: 0.75rem; border: 1px solid #eee; border-radius: 8px; background: #fff; margin-bottom: 0.5rem;">
-		<p>{content}</p>
-		<small>by {author} • {date}</small>
+type MessageSignals struct {
+  Id     string `json:"id"`
+  Author string `json:"author"`
+  Date   string `json:"date"`
+  Content string  `json:"content"`
+  Liked  bool    `json:"liked"`
+
+  ThreadedReplies []MessageSignals `json:"threadedReplies"`
+}
+
+templ Message(signals MessageSignals) {
+	<article id={ "message-" + signals.Id } class="card border border-gray-200 mb-4">
+		<p class="text-lg mb-3">{signals.Content}</p>
+		<small class="text-blue-400 text-sm">by {signals.Author} • {signals.Date}</small>
+		<div class="mt-4 flex gap-2">
+			<button class="border border-gray-300 rounded px-2 py-1 text-sm hover:bg-gray-50"
+					data-bind={ "liked_" + signals.Id }
+					data-on-click={ "$liked_" + signals.Id + " = !$liked_" + signals.Id + "; @post(`/api/messages/" + signals.Id + "/like`)" }>
+				<span data-show={ "!$liked_" + signals.Id }>👍 Like</span>
+				<span data-show={ "$liked_" + signals.Id }>👍 Liked</span>
+			</button>
+		</div>
 	</article>
 }
 
-templ ThreadMessage(author string, date string, content string) {
-	<article style="margin-top: 0.5rem; padding: 0.75rem; border-left: 3px solid #f59e42; background: #f9f9f9; border-radius: 6px;">
-		<p>{content}</p>
-		<small>by {author} • {date}</small>
+templ ThreadMessage(signals MessageSignals) {
+	<article class="mt-2 p-4 border-l-4 border-blue-600 bg-blue-50 rounded">
+		<p class="text-base mb-2">{signals.Content}</p>
+		<small class="text-blue-600 text-sm">by {signals.Author} • {signals.Date}</small>
 	</article>
 }

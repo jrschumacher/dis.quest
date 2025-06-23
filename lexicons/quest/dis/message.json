@@ -1,0 +1,38 @@
+{
+  "lexicon": 1,
+  "id": "quest.dis.message",
+  "needsCbor": true,
+  "needsType": true,
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": [
+          "topic",
+          "content",
+          "createdAt"
+        ],
+        "properties": {
+          "topic": {
+            "type": "string",
+            "format": "at-uri"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 10000
+          },
+          "replyTo": {
+            "type": "string",
+            "format": "at-uri"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

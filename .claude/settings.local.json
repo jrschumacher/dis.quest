@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go test:*)",
+      "Bash(golangci-lint run:*)",
+      "Bash(task test)",
+      "Bash(rg:*)",
+      "Bash(task lint)",
+      "Bash(templ generate:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(go mod:*)",
+      "Bash(go doc:*)",
+      "Bash(go build:*)",
+      "Bash(grep:*)",
+      "Bash(go get:*)",
+      "WebFetch(domain:docs.bsky.app)",
+      "Bash(mkdir:*)",
+      "Bash(find:*)",
+      "Bash(go vet:*)",
+      "Bash(go vet:*)",
+      "Bash(go list:*)",
+      "Bash(mv:*)"
+    ],
+    "deny": []
+  }
+}

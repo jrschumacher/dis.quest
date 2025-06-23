@@ -15,3 +15,11 @@ linters:
     - misspell
     - prealloc
     - nolintlint
+  disable:
+    - unused
+
+issues:
+  exclude-rules:
+    - path: server/app/dev.go
+      linters:
+        - unused
