@@ -11,7 +11,7 @@ import (
 )
 
 // TokenRefreshMiddleware automatically refreshes access tokens when they're close to expiring
-func TokenRefreshMiddleware(atprotoClient *atproto.Client) func(http.Handler) http.Handler {
+func TokenRefreshMiddleware(_ /* atprotoClient */ *atproto.Client) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Only refresh tokens for authenticated requests
@@ -47,7 +47,6 @@ func TokenRefreshMiddleware(atprotoClient *atproto.Client) func(http.Handler) ht
 			logger.Info("Token refresh needed, redirecting to login")
 			web.ClearSessionCookie(w)
 			http.Redirect(w, r, "/login", http.StatusFound)
-			return
 		})
 	}
 }

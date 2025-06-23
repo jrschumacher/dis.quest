@@ -22,6 +22,12 @@ import (
 	"github.com/jrschumacher/dis.quest/internal/svrlib"
 )
 
+// contextKey is a type for context keys to avoid collisions
+type contextKey string
+
+// httpRequestKey is the context key for HTTP request
+const httpRequestKey contextKey = "http_request"
+
 // Router handles authentication-related HTTP routes
 type Router struct {
 	*svrlib.Router
@@ -307,7 +313,7 @@ func (rt *Router) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	
 	logger.Info("Starting token exchange", "handle", handle, "code", code[:10]+"...")
 	// Inject HTTP request into context for provider access to cookies/session
-	ctxWithRequest := context.WithValue(ctx, "http_request", r)
+	ctxWithRequest := context.WithValue(ctx, httpRequestKey, r)
 	session, err := rt.atprotoClient.ExchangeCode(ctxWithRequest, code, verCookie.Value)
 	if err != nil {
 		logger.Error("Token exchange failed", "handle", handle, "error", err)
@@ -363,8 +369,8 @@ func getClientAuthJWK(cfg *config.Config) map[string]interface{} {
 		return map[string]interface{}{
 			"kty": "EC",
 			"crv": "P-256", 
-			"x":   base64.RawURLEncoding.EncodeToString(key.PublicKey.X.Bytes()),
-			"y":   base64.RawURLEncoding.EncodeToString(key.PublicKey.Y.Bytes()),
+			"x":   base64.RawURLEncoding.EncodeToString(key.X.Bytes()),
+			"y":   base64.RawURLEncoding.EncodeToString(key.Y.Bytes()),
 			"alg": "ES256",
 			"use": "sig",
 		}

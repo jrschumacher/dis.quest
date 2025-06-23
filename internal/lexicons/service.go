@@ -193,7 +193,7 @@ func (s *Service) ListTopics(ctx context.Context, userDID, accessToken string, d
 		return nil, "", fmt.Errorf("failed to list topics: %w", err)
 	}
 
-	var topics []*Topic
+	topics := make([]*Topic, 0, len(result.Records))
 	for _, record := range result.Records {
 		topicRecord, err := TopicRecordFromMap(record.Value)
 		if err != nil {

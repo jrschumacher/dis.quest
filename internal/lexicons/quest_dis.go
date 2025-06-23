@@ -70,7 +70,7 @@ func (t *TopicRecord) ToTopic(uri, cid string) *Topic {
 	}
 }
 
-// FromMap creates TopicRecord from map (for parsing PDS responses)
+// TopicRecordFromMap creates TopicRecord from map (for parsing PDS responses)
 func TopicRecordFromMap(data map[string]interface{}) (*TopicRecord, error) {
 	record := &TopicRecord{}
 

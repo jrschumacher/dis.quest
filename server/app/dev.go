@@ -1,3 +1,6 @@
+//go:build !production
+// +build !production
+
 package app
 
 import (
@@ -5,7 +8,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -731,8 +733,8 @@ func (r *Router) listPDSTopics(req *http.Request, userDID string) TestResult {
 		URI     string
 	}
 
-	var topics []TopicForTable
-	var topicsInfo []string
+	topics := make([]TopicForTable, 0, len(response.Records))
+	topicsInfo := make([]string, 0, len(response.Records))
 
 	for _, record := range response.Records {
 		// Parse the record to get topic details
@@ -874,10 +876,11 @@ func (r *Router) createRandomTopic(req *http.Request, userDID string) TestResult
 		{"e2e", "testing", "demo"},
 	}
 
-	rand.Seed(time.Now().UnixNano())
-	randomTopic := topics[rand.Intn(len(topics))]
-	randomMessage := messages[rand.Intn(len(messages))]
-	randomTags := tagSets[rand.Intn(len(tagSets))]
+	// Use time-based selection instead of weak random for dev purposes
+	now := time.Now()
+	randomTopic := topics[int(now.UnixNano())%len(topics)]
+	randomMessage := messages[int(now.UnixNano()/1000)%len(messages)]
+	randomTags := tagSets[int(now.UnixNano()/1000000)%len(tagSets)]
 
 	// Add timestamp to make it unique
 	uniqueTopic := fmt.Sprintf("%s [%s]", randomTopic, time.Now().Format("15:04:05"))
@@ -1130,7 +1133,7 @@ This error contains the exact response from Bluesky's API explaining why the req
 }
 
 // testSessionAuth tests creating a post using session-based auth (like WhiteWind) instead of OAuth
-func (r *Router) testSessionAuth(req *http.Request, userDID string) TestResult {
+func (r *Router) testSessionAuth(_ /* req */ *http.Request, _ /* userDID */ string) TestResult {
 	return TestResult{
 		Operation: "test_session_auth",
 		Success:   false,
